@@ -111,3 +111,42 @@ Creates one plot per enrichment database. For each module, the top \code{x} term
 are placed into dedicated side-by-side panels (\verb{Top 1}, \verb{Top 2}, ...), and
 meta-cluster trajectories are drawn as longitudinal waves.
 }
+\examples{
+hc <- hc_example_data("clustered")
+gmt <- system.file("extdata", "toy_celltype_markers.gmt", package = "hcocena")
+hc <- hc_functional_enrichment(
+  hc,
+  gene_sets = character(0),
+  custom_gmt_files = c(CellTypes = gmt),
+  universe = "network"
+)
+hc <- hc_longitudinal_step1_module_donor(
+  hc,
+  donor_col = "donor",
+  time_col = "timepoint",
+  time_levels = c("T1", "T2"),
+  k = 2,
+  nstart = 1,
+  cap_runs = 1,
+  impute = FALSE,
+  seed = 1
+)$hc
+hc <- hc_longitudinal_endotype_clustering(hc, k = 2, nstart = 1, seed = 1)
+hc <- hc_longitudinal_meta_clustering(
+  hc,
+  feature_source = "feature_matrix_used",
+  k = 2:3,
+  method = "kmeans",
+  consensus = TRUE,
+  seed = 1
+)
+waves <- hc_plot_longitudinal_enrichment_meta_waves(
+  hc,
+  databases = "Celltypes",
+  top = 1,
+  min_term_genes = 3,
+  score_method = "rank_mean",
+  save_pdf = FALSE,
+  export_excel = FALSE
+)
+}

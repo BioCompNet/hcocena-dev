@@ -25,6 +25,6 @@ Updated \code{HCoCenaExperiment}.
 Add categorical module heatmap annotations (S4 API)
 }
 \examples{
-hc <- readRDS(system.file("extdata", "hc_clustered.rds", package = "hcocena"))
+hc <- hc_example_data("clustered")
 hc <- hc_col_anno_categorical(hc, variables = "batch")
 }

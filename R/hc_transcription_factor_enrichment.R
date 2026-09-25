@@ -347,6 +347,9 @@
     }
   }
   .hc_set_bridge_hcobject_slot(c("integrated_output", "enrichall"), resultlist)
+  # `integrated_output$enrichall` is not carried back into the S4 object, so
+  # keep a copy where it survives; hc_check_tf() reads it from there.
+  .hc_set_bridge_hcobject_slot(c("satellite_outputs", "tf_network_targets"), resultlist)
 }
 
 

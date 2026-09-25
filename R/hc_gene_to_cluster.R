@@ -39,7 +39,7 @@
 #'   (module colour). Genes that were not assigned to any module carry the
 #'   colour `"white"`.
 #' @examples
-#' hc <- readRDS(system.file("extdata", "hc_clustered.rds", package = "hcocena"))
+#' hc <- hc_example_data("clustered")
 #' head(hc_gene_to_cluster(hc))
 #' @export
 hc_gene_to_cluster <- function(hc) {

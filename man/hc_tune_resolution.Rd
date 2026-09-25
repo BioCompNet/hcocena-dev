@@ -50,6 +50,6 @@ Internally this calls \code{hc_auto_tune(..., tune_cutoff = FALSE, tune_clusteri
 The clustering report is additionally mirrored to \code{hc@satellite$resolution_tuning}.
 }
 \examples{
-hc <- readRDS(system.file("extdata", "hc_clustered.rds", package = "hcocena"))
+hc <- hc_example_data("clustered")
 hc <- hc_tune_resolution(hc, apply = FALSE)
 }

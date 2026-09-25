@@ -55,7 +55,7 @@ in \code{hc_run_expression_analysis_2()} to build a cluster heatmap by
 meta-cluster x timepoint.
 }
 \examples{
-hc <- readRDS(system.file("extdata", "hc_clustered.rds", package = "hcocena"))
+hc <- hc_example_data("clustered")
 hc <- hc_longitudinal_step1_module_donor(
   hc,
   donor_col = "donor",

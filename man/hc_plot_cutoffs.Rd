@@ -28,6 +28,6 @@ diagnostic plot it draws.
 plot cutoffs
 }
 \examples{
-hc <- readRDS(system.file("extdata", "hc_after_part1.rds", package = "hcocena"))
+hc <- hc_example_data("after_part1")
 hc <- hc_plot_cutoffs(hc, interactive = FALSE)
 }

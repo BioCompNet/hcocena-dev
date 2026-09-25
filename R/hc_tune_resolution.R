@@ -20,7 +20,7 @@
 #'
 #' @return Updated `HCoCenaExperiment`.
 #' @examples
-#' hc <- readRDS(system.file("extdata", "hc_clustered.rds", package = "hcocena"))
+#' hc <- hc_example_data("clustered")
 #' hc <- hc_tune_resolution(hc, apply = FALSE)
 #' @export
 hc_tune_resolution <- function(hc,

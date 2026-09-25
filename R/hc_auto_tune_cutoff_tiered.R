@@ -42,7 +42,7 @@
 #' @return Updated `HCoCenaExperiment` with a report in
 #'   `hc@satellite$cutoff_tuning`.
 #' @examples
-#' hc <- readRDS(system.file("extdata", "hc_after_part1.rds", package = "hcocena"))
+#' hc <- hc_example_data("after_part1")
 #' hc <- hc_auto_tune_cutoff_tiered(hc, apply = FALSE, verbose = FALSE)
 #' @export
 hc_auto_tune_cutoff_tiered <- function(hc,
@@ -527,7 +527,7 @@ hc_auto_tune_cutoff_tiered <- function(hc,
 #' @inheritParams hc_auto_tune_cutoff_tiered
 #' @return Updated `HCoCenaExperiment`.
 #' @examples
-#' hc <- readRDS(system.file("extdata", "hc_after_part1.rds", package = "hcocena"))
+#' hc <- hc_example_data("after_part1")
 #' hc <- hc_tune_cutoff(hc, apply = FALSE, verbose = FALSE)
 #' @export
 hc_tune_cutoff <- function(hc,

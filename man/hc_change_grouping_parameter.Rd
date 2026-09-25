@@ -39,6 +39,6 @@ recalculates grouped GFCs for a different grouping variable. No integrated
 network rebuild and no module re-clustering is performed.
 }
 \examples{
-hc <- readRDS(system.file("extdata", "hc_clustered.rds", package = "hcocena"))
+hc <- hc_example_data("clustered")
 hc <- hc_change_grouping_parameter(hc, group_by = "batch")
 }

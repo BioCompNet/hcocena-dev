@@ -69,7 +69,7 @@ Re-clusters genes within selected modules and replaces those modules by
 submodules (with color shades of the parent module).
 }
 \examples{
-hc <- readRDS(system.file("extdata", "hc_clustered.rds", package = "hcocena"))
+hc <- hc_example_data("clustered")
 hc <- hc_plot_cluster_heatmap(hc, file_name = FALSE)
 hc <- hc_split_modules(hc, modules = "M1", resolution = 1)
 }

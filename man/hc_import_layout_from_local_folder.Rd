@@ -18,3 +18,14 @@ Updated \code{HCoCenaExperiment}.
 \description{
 Import Cytoscape layout from local folder (S4 API)
 }
+\examples{
+hc <- hc_example_data("clustered")
+# A layout CSV as written by hc_import_layout_from_cytoscape(): one row per
+# node, named by gene, with x and y coordinates.
+g <- hc_graph(hc)
+xy <- igraph::layout_with_fr(g)
+rownames(xy) <- igraph::V(g)$name
+layout_file <- file.path(tempdir(), "network_layout.csv")
+utils::write.csv(xy, layout_file)
+hc <- hc_import_layout_from_local_folder(hc, file = layout_file)
+}

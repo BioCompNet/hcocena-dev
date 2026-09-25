@@ -264,7 +264,7 @@
 #'   [stats::p.adjust()]. Default is `"BH"`.
 #' @return Updated `HCoCenaExperiment`.
 #' @examples
-#' hc <- readRDS(system.file("extdata", "hc_clustered.rds", package = "hcocena"))
+#' hc <- hc_example_data("clustered")
 #' hc_meta_correlation_num(hc, set = 1, meta = "age")
 #' @export
 hc_meta_correlation_num <- function(hc, set, meta, p_val = 0.05,

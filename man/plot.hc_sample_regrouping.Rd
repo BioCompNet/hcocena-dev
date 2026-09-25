@@ -24,7 +24,7 @@ RStudio and notebook contexts where \code{print()} may not display a silent
 \code{pheatmap} object.
 }
 \examples{
-hc <- readRDS(system.file("extdata", "hc_clustered.rds", package = "hcocena"))
+hc <- hc_example_data("clustered")
 rg <- hc_regroup_samples(hc, layer = 1, k = 2, apply = FALSE)
 plot(rg)
 }

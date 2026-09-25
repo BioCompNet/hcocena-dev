@@ -673,6 +673,12 @@ hc_preview_celltype_database <- function(database,
     }
 
     sig <- enr@result
+    # Storey's q-value is NA whenever the p-value distribution is too
+    # degenerate to estimate pi0 (e.g. a single testable term), which would
+    # silently drop every hit. Fall back to the `padj`-adjusted p-value there,
+    # as `hc_functional_enrichment()` does.
+    q_na <- base::is.na(.hc_as_numeric_safely(sig$qvalue))
+    sig$qvalue[q_na] <- sig$p.adjust[q_na]
     sig <- sig[!base::is.na(sig$qvalue) & sig$qvalue <= qval, , drop = FALSE]
     if (base::nrow(sig) == 0) {
       next

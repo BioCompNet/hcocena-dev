@@ -68,6 +68,6 @@ Updated \code{HCoCenaExperiment} with tuning report in
 The tuning report is stored in \code{hc@satellite$auto_tune}.
 }
 \examples{
-hc <- readRDS(system.file("extdata", "hc_after_part1.rds", package = "hcocena"))
+hc <- hc_example_data("after_part1")
 hc <- hc_auto_tune(hc, apply = FALSE)
 }

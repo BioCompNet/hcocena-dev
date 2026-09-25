@@ -17,6 +17,16 @@
 #' @param return_data Logical. If `TRUE`, return a list with `plot`, `matrix`,
 #'   and `long_data`; otherwise return only the plot.
 #' @return A `ggplot` object or a list containing plot + data.
+#' @examples
+#' hc <- hc_example_data("clustered")
+#' gmt <- system.file("extdata", "toy_celltype_markers.gmt", package = "hcocena")
+#' hc <- hc_celltype_annotation(
+#'   hc,
+#'   databases = character(0),
+#'   custom_gmt_files = c(CellTypes = gmt),
+#'   export_excel = FALSE
+#' )
+#' p <- hc_plot_celltype_annotation_matrix(hc)
 #' @export
 hc_plot_celltype_annotation_matrix <- function(hc,
                                                database = NULL,

@@ -16,6 +16,6 @@ Updated \code{HCoCenaExperiment}.
 Alluvial comparison plots (S4 API)
 }
 \examples{
-hc <- readRDS(system.file("extdata", "hc_clustered.rds", package = "hcocena"))
+hc <- hc_example_data("clustered")
 hc <- hc_algo_alluvial(hc)
 }

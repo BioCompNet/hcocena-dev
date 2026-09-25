@@ -1,6 +1,6 @@
 #' Check Transcription Factor
 #'
-#' This function leverages the information collected with TF_enrich_network()
+#' This function leverages the information collected with hc_tf_overrep_network()
 #' 	to allow the user to query specific transcription factors of interest and see how their top targets are spread across modules.
 #' 	The goal is to uncover potential co-regulations between clusters.
 #' @param TF A string giving the name of the transcription factor to be queried.
@@ -17,7 +17,23 @@
   base::colnames(gtc) <- base::c("gene", "cluster")
 
   # the targets of the transcription factor in question:
-  targets <- hcobject[["integrated_output"]][["enrichall"]][[TF]][["targets"]]
+  tf_results <- hcobject[["satellite_outputs"]][["tf_network_targets"]] %||%
+    hcobject[["integrated_output"]][["enrichall"]]
+  if (base::length(tf_results) == 0) {
+    stop(
+      "No network-wide TF enrichment found. Run `hc_tf_overrep_network()` ",
+      "before `hc_check_tf()`.",
+      call. = FALSE
+    )
+  }
+  if (!TF %in% base::names(tf_results)) {
+    stop(
+      "`", TF, "` is not among the TFs returned by `hc_tf_overrep_network()`. ",
+      "Available: ", base::paste(base::names(tf_results), collapse = ", "), ".",
+      call. = FALSE
+    )
+  }
+  targets <- tf_results[[TF]][["targets"]]
 
   # create edgelist from TF to it's targets, removing self edges:
   edges <- base::data.frame(from = base::rep(TF, base::length(targets)), to = targets) %>%

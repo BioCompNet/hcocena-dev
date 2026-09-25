@@ -36,6 +36,6 @@ Updated \code{HCoCenaExperiment}.
 Re-plots the integrated network with a gene set of interest highlighted.
 }
 \examples{
-hc <- readRDS(system.file("extdata", "hc_clustered.rds", package = "hcocena"))
+hc <- hc_example_data("clustered")
 hc <- hc_highlight_geneset(hc, gene_set = c("CD3D", "CD19"))
 }

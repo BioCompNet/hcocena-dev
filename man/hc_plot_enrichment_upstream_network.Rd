@@ -90,3 +90,24 @@ Updated \code{HCoCenaExperiment}.
 \description{
 Plot module knowledge network from enrichment + upstream inference (S4 API)
 }
+\examples{
+if (requireNamespace("decoupleR", quietly = TRUE)) {
+  hc <- hc_example_data("clustered")
+  gmt <- system.file("extdata", "toy_celltype_markers.gmt",
+                     package = "hcocena")
+  hc <- hc_functional_enrichment(
+    hc,
+    gene_sets = character(0),
+    custom_gmt_files = c(CellTypes = gmt),
+    universe = "network"
+  )
+  hc <- hc_upstream_inference(
+    hc,
+    resources = "Pathway",
+    custom_pathway_gmt = c(CellTypes = gmt),
+    plot = FALSE,
+    save_pdf = FALSE
+  )
+  hc <- hc_plot_enrichment_upstream_network(hc, save_pdf = FALSE)
+}
+}

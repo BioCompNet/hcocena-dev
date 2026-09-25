@@ -1,2 +1,2 @@
-hc <- readRDS(system.file("extdata", "hc_prepared.rds", package = "hcocena"))
+hc <- hc_example_data("prepared")
 is(hc, "HCoCenaExperiment")

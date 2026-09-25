@@ -39,9 +39,14 @@ available models as a data frame. Supports the same providers as
 local OpenAI-compatible server (vLLM).
 }
 \examples{
-\dontrun{
-hc_list_llm_models("gemini")
-hc_list_llm_models(c("openai", "claude"))
-hc_list_llm_models("vllm", base_url = "http://my-server:8000/v1")
+# Contacts the provider APIs; each provider needs its API key set in the
+# environment (or a reachable server for "vllm").
+\donttest{
+if (nzchar(Sys.getenv("GEMINI_API_KEY"))) {
+  hc_list_llm_models("gemini")
+}
+if (nzchar(Sys.getenv("OPENAI_API_KEY"))) {
+  hc_list_llm_models("openai")
+}
 }
 }

@@ -24,6 +24,6 @@ Updated \code{HCoCenaExperiment}.
 PCA algorithm comparison (S4 API)
 }
 \examples{
-hc <- readRDS(system.file("extdata", "hc_clustered.rds", package = "hcocena"))
+hc <- hc_example_data("clustered")
 hc <- hc_pca_algo_compare(hc)
 }

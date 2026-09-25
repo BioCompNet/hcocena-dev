@@ -25,8 +25,8 @@ Contrasts the neighbourhoods of \code{gene_vec} between two networks and reports
 which edges are shared and which are unique to either network.
 }
 \examples{
-hc <- readRDS(system.file("extdata", "hc_clustered.rds", package = "hcocena"))
-g <- hc_integration(hc)@graph
+hc <- hc_example_data("clustered")
+g <- hc_graph(hc)
 hc <- hc_network_comparison_2(
   hc,
   net1 = g,

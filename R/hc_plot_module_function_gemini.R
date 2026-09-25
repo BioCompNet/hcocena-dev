@@ -62,7 +62,8 @@
 #' @export
 #'
 #' @examples
-#' \donttest{
+#' # A stand-in for the result of hc_module_function_llm(), which needs an LLM
+#' # endpoint:
 #' hc <- hc_init()
 #' methods::slot(hc, "satellite")[["llm_module_function"]] <- list(
 #'   module_1 = list(status = "ok")
@@ -77,7 +78,6 @@
 #' )
 #' p <- hc_plot_module_function_llm(hc, with_heatmap = FALSE, save = FALSE)
 #' print(p)
-#' }
 hc_plot_module_function_llm <- function(hc,
                                         slot_name = "llm_module_function",
                                         modules = NULL,

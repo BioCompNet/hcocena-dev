@@ -20,10 +20,15 @@
 #'   that cannot be reached (e.g. a missing API key) are skipped with a warning
 #'   rather than aborting the whole call.
 #' @examples
-#' \dontrun{
-#' hc_list_llm_models("gemini")
-#' hc_list_llm_models(c("openai", "claude"))
-#' hc_list_llm_models("vllm", base_url = "http://my-server:8000/v1")
+#' # Contacts the provider APIs; each provider needs its API key set in the
+#' # environment (or a reachable server for "vllm").
+#' \donttest{
+#' if (nzchar(Sys.getenv("GEMINI_API_KEY"))) {
+#'   hc_list_llm_models("gemini")
+#' }
+#' if (nzchar(Sys.getenv("OPENAI_API_KEY"))) {
+#'   hc_list_llm_models("openai")
+#' }
 #' }
 #' @export
 hc_list_llm_models <- function(provider = "all",

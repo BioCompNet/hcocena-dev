@@ -165,7 +165,7 @@ calc_jaccard <- function(set1, set2) {
 #' @param cellsize Cell size of the resulting heatmap. Default is 18.
 #' @return Updated `HCoCenaExperiment`.
 #' @examples
-#' hc <- readRDS(system.file("extdata", "hc_clustered.rds", package = "hcocena"))
+#' hc <- hc_example_data("clustered")
 #' gtc <- hc_gene_to_cluster(hc)
 #' f1 <- tempfile(fileext = ".tsv")
 #' f2 <- tempfile(fileext = ".tsv")
@@ -194,8 +194,8 @@ hc_network_comparison_1 <- function(hc, gtc1_path, gtc2_path, sep = "\t",
 #' @param gene_vec Character vector of genes to restrict the comparison to.
 #' @return Updated `HCoCenaExperiment`.
 #' @examples
-#' hc <- readRDS(system.file("extdata", "hc_clustered.rds", package = "hcocena"))
-#' g <- hc_integration(hc)@graph
+#' hc <- hc_example_data("clustered")
+#' g <- hc_graph(hc)
 #' hc <- hc_network_comparison_2(
 #'   hc,
 #'   net1 = g,

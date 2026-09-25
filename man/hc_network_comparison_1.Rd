@@ -34,7 +34,7 @@ Compares two externally stored gene-to-cluster tables and visualises how the
 modules of the first assignment map onto those of the second.
 }
 \examples{
-hc <- readRDS(system.file("extdata", "hc_clustered.rds", package = "hcocena"))
+hc <- hc_example_data("clustered")
 gtc <- hc_gene_to_cluster(hc)
 f1 <- tempfile(fileext = ".tsv")
 f2 <- tempfile(fileext = ".tsv")

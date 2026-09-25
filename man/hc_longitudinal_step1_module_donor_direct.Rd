@@ -96,7 +96,7 @@ each module directly on the donor-by-time trajectory matrix, especially for
 short trajectories with only a few timepoints.
 }
 \examples{
-hc <- readRDS(system.file("extdata", "hc_clustered.rds", package = "hcocena"))
+hc <- hc_example_data("clustered")
 res <- hc_longitudinal_step1_module_donor_direct(
   hc,
   donor_col = "donor",

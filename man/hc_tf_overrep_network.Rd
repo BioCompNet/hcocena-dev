@@ -21,3 +21,11 @@ Updated \code{HCoCenaExperiment}.
 \description{
 TF enrichment network-wide (S4 API)
 }
+\examples{
+\donttest{
+# Queries the ChEA3 web service.
+hc <- hc_example_data("clustered")
+hc <- hc_tf_overrep_network(hc, topTF = 10, topTarget = 5)
+names(hc_satellite(hc, "tf_network_targets"))
+}
+}

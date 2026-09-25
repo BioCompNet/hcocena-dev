@@ -48,3 +48,14 @@ A \code{ggplot} object or a list containing plot + data.
 Uses \code{hc@satellite$celltype_annotation} and draws a heatmap-like matrix
 (modules x cell types) for easier interpretation than stacked barplots.
 }
+\examples{
+hc <- hc_example_data("clustered")
+gmt <- system.file("extdata", "toy_celltype_markers.gmt", package = "hcocena")
+hc <- hc_celltype_annotation(
+  hc,
+  databases = character(0),
+  custom_gmt_files = c(CellTypes = gmt),
+  export_excel = FALSE
+)
+p <- hc_plot_celltype_annotation_matrix(hc)
+}

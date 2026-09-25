@@ -69,7 +69,7 @@ Clusters donors based on module-time features produced by
 Calinski-Harabasz index.
 }
 \examples{
-hc <- readRDS(system.file("extdata", "hc_clustered.rds", package = "hcocena"))
+hc <- hc_example_data("clustered")
 hc <- hc_longitudinal_module_means(hc, donor_col = "donor", time_col = "timepoint")
 hc <- hc_longitudinal_endotype_clustering(hc, k = 2)
 }

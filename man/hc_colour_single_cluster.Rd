@@ -19,6 +19,6 @@ Re-plots the integrated network with one module emphasised by colour and
 node size.
 }
 \examples{
-hc <- readRDS(system.file("extdata", "hc_clustered.rds", package = "hcocena"))
+hc <- hc_example_data("clustered")
 hc <- hc_colour_single_cluster(hc, cluster = "gold")
 }

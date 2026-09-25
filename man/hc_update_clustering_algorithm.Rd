@@ -22,6 +22,6 @@ Updated \code{HCoCenaExperiment}.
 Update clustering algorithm (S4 API)
 }
 \examples{
-hc <- readRDS(system.file("extdata", "hc_clustered.rds", package = "hcocena"))
+hc <- hc_example_data("clustered")
 hc <- hc_update_clustering_algorithm(hc, new_algo = "cluster_louvain")
 }

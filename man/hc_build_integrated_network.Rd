@@ -33,6 +33,6 @@ Updated \code{HCoCenaExperiment}.
 The previously constructed layer-specific networks are being integrated.
 }
 \examples{
-hc <- readRDS(system.file("extdata", "hc_after_part2.rds", package = "hcocena"))
+hc <- hc_example_data("after_part2")
 hc <- hc_build_integrated_network(hc, mode = "u")
 }

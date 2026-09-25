@@ -93,7 +93,7 @@ Runs the direct donor-by-time step 1 backend and then reuses the existing
 step 2 and step 3 quick wrappers on the resulting output slot family.
 }
 \examples{
-hc <- readRDS(system.file("extdata", "hc_clustered.rds", package = "hcocena"))
+hc <- hc_example_data("clustered")
 res <- hc_longitudinal_workflow_direct(
   hc,
   donor_col = "donor",

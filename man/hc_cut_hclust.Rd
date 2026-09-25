@@ -49,6 +49,6 @@ original groups and exports a new annotation file (without row names). After
 saving, re-run the pipeline from \code{\link[=hc_run_expression_analysis_2]{hc_run_expression_analysis_2()}} onward.
 }
 \examples{
-hc <- readRDS(system.file("extdata", "hc_clustered.rds", package = "hcocena"))
+hc <- hc_example_data("clustered")
 hc <- hc_cut_hclust(hc, by = "module", k = c(2, 2), save = FALSE)
 }

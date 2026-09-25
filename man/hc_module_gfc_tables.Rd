@@ -82,9 +82,9 @@ which is expected to be on the order of \code{1e-3} -- the rounding hCoCena
 applies per gene.
 }
 \examples{
-hc <- readRDS(system.file("extdata", "hc_clustered.rds", package = "hcocena"))
+hc <- hc_example_data("clustered")
 hc <- hc_module_gfc_tables(hc, export_xlsx = FALSE)
-hc@satellite$module_gfc_tables$by_group
+hc_satellite(hc, "module_gfc_tables")$by_group
 }
 \seealso{
 \code{\link[=hc_plot_cluster_heatmap]{hc_plot_cluster_heatmap()}}, which produces the group-level

@@ -716,6 +716,16 @@
   } else {
     activity_mat <- .hc_ui_prepare_activity_matrix_from_gfc(gfc_all)
     activity_label <- "GFC"
+    # Layers that share group names contribute repeated condition columns.
+    # Label those with their layer, as the module heatmap does, so that each
+    # layer stays a condition of its own instead of being merged by name.
+    gfc_cols <- base::colnames(activity_mat)
+    if (base::anyDuplicated(gfc_cols) > 0) {
+      base::colnames(activity_mat) <- base::make.unique(
+        .hc_gfc_display_col_labels(hcobject, gfc_cols),
+        sep = " "
+      )
+    }
   }
   activity_module_heatmap_mat <- .hc_ui_module_means_from_gene_matrix(
     gene_mat = activity_mat,

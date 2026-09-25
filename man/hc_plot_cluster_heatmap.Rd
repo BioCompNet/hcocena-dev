@@ -22,6 +22,6 @@ Updated \code{HCoCenaExperiment}.
 Plot module heatmap (S4 API)
 }
 \examples{
-hc <- readRDS(system.file("extdata", "hc_clustered.rds", package = "hcocena"))
+hc <- hc_example_data("clustered")
 hc <- hc_plot_cluster_heatmap(hc, file_name = FALSE)
 }

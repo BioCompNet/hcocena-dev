@@ -1,7 +1,7 @@
 Package: hcocena
 Title: Horizontal Integration and Analysis of Multiple Transcriptomics
         Datasets
-Version: 0.99.7
+Version: 0.99.8
 Authors@R: c(
     person(given = "Lisa",
            family = "Holsten",
@@ -55,7 +55,7 @@ Imports: Cairo (>= 1.5-12.2), circlize, clusterProfiler (>= 3.18.1),
         1.6.2), stringr (>= 1.5.1), SummarizedExperiment, tibble (>=
         3.1.2), tidyselect (>= 1.1.1), zip (>= 2.3.0)
 Suggests: BiocStyle, CALIBERrfimpute, decoupleR, dorothea, ellmer,
-        ExperimentHub, emmeans, ggh4x, ggrepel, graphlayouts, GSVA, htmlwidgets,
+        emmeans, ggh4x, ggrepel, graphlayouts, GSVA, htmlwidgets,
         knitr (>= 1.33), lme4, limma, mice, networkD3 (>= 0.4),
         nlme, png, progeny, RANN, RCy3 (>= 2.10.2), RcppAnnoy, repr, rmarkdown,
         SingleCellExperiment, testthat (>= 3.0.0), umap, uwot, withr

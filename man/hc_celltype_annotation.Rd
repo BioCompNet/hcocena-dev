@@ -97,3 +97,16 @@ Updated \code{HCoCenaExperiment}.
 \description{
 Module cell-type annotation from Enrichr (S4 API)
 }
+\examples{
+hc <- hc_example_data("clustered")
+gmt <- system.file("extdata", "toy_celltype_markers.gmt", package = "hcocena")
+# A local marker GMT instead of the default Enrichr libraries, so that the
+# example runs offline:
+hc <- hc_celltype_annotation(
+  hc,
+  databases = character(0),
+  custom_gmt_files = c(CellTypes = gmt),
+  export_excel = FALSE
+)
+hc_satellite(hc, "celltype_annotation")$selected_celltypes
+}

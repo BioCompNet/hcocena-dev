@@ -669,7 +669,7 @@
 #'   `layer = "all"` (or multiple layers are supplied), returns per-layer plot
 #'   and diagnostic lists keyed by layer id.
 #' @examples
-#' hc <- readRDS(system.file("extdata", "hc_clustered.rds", package = "hcocena"))
+#' hc <- hc_example_data("clustered")
 #' res <- hc_longitudinal_step1_module_donor_direct(
 #'   hc,
 #'   donor_col = "donor",
@@ -848,7 +848,7 @@ hc_longitudinal_step1_module_donor_direct <- function(hc,
 #'
 #' @return A list with updated `hc`, nested `plots`, and per-step diagnostics.
 #' @examples
-#' hc <- readRDS(system.file("extdata", "hc_clustered.rds", package = "hcocena"))
+#' hc <- hc_example_data("clustered")
 #' res <- hc_longitudinal_workflow_direct(
 #'   hc,
 #'   donor_col = "donor",

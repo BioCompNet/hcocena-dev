@@ -18,3 +18,11 @@ Rplots.pdf
 docker/project_data/*.rds
 realdata-output/
 realdata-reference/
+
+# Local agent notes and scratch scripts; not part of the package or the repo
+CLAUDE.md
+test_llm_claude.R
+.agents/
+.claude/
+.codex/
+.Rhistory

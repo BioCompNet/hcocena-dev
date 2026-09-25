@@ -79,7 +79,7 @@ Clusters donors on CAP features (or alternative longitudinal feature
 matrices), providing CH-based model selection and PCA/UMAP embeddings.
 }
 \examples{
-hc <- readRDS(system.file("extdata", "hc_clustered.rds", package = "hcocena"))
+hc <- hc_example_data("clustered")
 hc <- hc_longitudinal_step1_module_donor(
   hc,
   donor_col = "donor",

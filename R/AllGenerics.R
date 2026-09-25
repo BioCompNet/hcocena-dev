@@ -68,3 +68,46 @@ setMethod("hc_clusters", "HCoCenaExperiment", function(x) {
     NULL
   }
 })
+
+#' Access the integrated network of an `HCoCenaExperiment`
+#' @param x An `HCoCenaExperiment`.
+#' @examples
+#' hc <- hc_example_data("clustered")
+#' g <- hc_graph(hc)
+#' igraph::vcount(g)
+#' @return The integrated network as an `igraph` object, or `NULL` if
+#'   `hc_build_integrated_network()` has not been run yet.
+#' @export
+setGeneric("hc_graph", function(x) standardGeneric("hc_graph"))
+
+#' @rdname hc_graph
+#' @export
+setMethod("hc_graph", "HCoCenaExperiment", function(x) x@integration@graph)
+
+#' Access downstream results stored in an `HCoCenaExperiment`
+#'
+#' Downstream steps (module gene lists, enrichments, hub genes, module
+#' statistics, ...) store their results in a named list inside the object.
+#' `hc_satellite()` returns that list, or a single entry of it.
+#' @param x An `HCoCenaExperiment`.
+#' @param name Optional name of a single entry. If `NULL` (default), the whole
+#'   list is returned.
+#' @examples
+#' hc <- hc_example_data("clustered")
+#' names(hc_satellite(hc))
+#' @return A `S4Vectors::SimpleList` of stored results, or the entry `name`
+#'   (`NULL` if that entry does not exist).
+#' @export
+setGeneric("hc_satellite", function(x, name = NULL) standardGeneric("hc_satellite"))
+
+#' @rdname hc_satellite
+#' @export
+setMethod("hc_satellite", "HCoCenaExperiment", function(x, name = NULL) {
+  if (base::is.null(name)) {
+    return(x@satellite)
+  }
+  if (!(base::is.character(name) && base::length(name) == 1L)) {
+    stop("`name` must be a single character string or NULL.", call. = FALSE)
+  }
+  if (name %in% base::names(x@satellite)) x@satellite[[name]] else NULL
+})

@@ -20,6 +20,6 @@ Updated \code{HCoCenaExperiment}.
 A folder with the given name is created in the output directory. All analysis outputs will be saved to this folder.
 }
 \examples{
-hc <- readRDS(system.file("extdata", "hc_prepared.rds", package = "hcocena"))
+hc <- hc_example_data("prepared")
 hc <- hc_init_save_folder(hc, name = "")
 }

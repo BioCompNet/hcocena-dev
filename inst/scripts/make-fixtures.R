@@ -178,8 +178,20 @@ hc <- hc_cluster_calculation(hc, cluster_algo = "cluster_leiden",
                              no_of_iterations = 2, resolution = 1)
 write_fixture(hc, "hc_clustered.rds")
 
+# The four marker panels as a GMT, for the enrichment, cell-type and upstream
+# examples. Each panel has exactly the ten genes of its simulated block.
+gmt_names <- c(T_cell = "T cells", B_cell = "B cells",
+               Monocyte = "Monocytes", NK_cell = "NK cells")
+writeLines(
+  vapply(names(GENE_BLOCKS), function(b) {
+    paste(c(gmt_names[[b]], "-", GENE_BLOCKS[[b]]), collapse = "\t")
+  }, character(1)),
+  file.path(extdata, "toy_celltype_markers.gmt")
+)
+
 for (f in c("toy_layer1_counts.tsv", "toy_layer1_anno.tsv",
-            "toy_layer2_counts.tsv", "toy_layer2_anno.tsv")) {
+            "toy_layer2_counts.tsv", "toy_layer2_anno.tsv",
+            "toy_celltype_markers.gmt")) {
   message(sprintf("%-22s %5.0f KB", f, file.size(file.path(extdata, f)) / 1024))
 }
 for (f in c("hc_prepared.rds", "hc_after_part1.rds",

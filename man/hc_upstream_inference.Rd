@@ -133,3 +133,20 @@ Updated \code{HCoCenaExperiment}.
 \description{
 Upstream regulator/pathway inference (S4 API)
 }
+\examples{
+if (requireNamespace("decoupleR", quietly = TRUE)) {
+  hc <- hc_example_data("clustered")
+  gmt <- system.file("extdata", "toy_celltype_markers.gmt",
+                     package = "hcocena")
+  # Pathway activity from a local GMT; the DoRothEA TF priors
+  # (`resources = "TF"`) need the `dorothea` package.
+  hc <- hc_upstream_inference(
+    hc,
+    resources = "Pathway",
+    custom_pathway_gmt = c(CellTypes = gmt),
+    plot = FALSE,
+    save_pdf = FALSE
+  )
+  head(hc_satellite(hc, "upstream_inference")$selected_upstream_all)
+}
+}

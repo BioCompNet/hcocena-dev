@@ -25,7 +25,7 @@ draws the enrichment panels already stored in \code{hc@satellite$enrichments}
 after \code{hc_functional_enrichment()}, without recomputing enrichment.
 }
 \examples{
-hc <- readRDS(system.file("extdata", "hc_clustered.rds", package = "hcocena"))
+hc <- hc_example_data("clustered")
 gmt <- tempfile(fileext = ".gmt")
 writeLines(
   c(

@@ -44,7 +44,7 @@ Plots module trajectories after meta-clustering using donor and meta-cluster
 mean waves.
 }
 \examples{
-hc <- readRDS(system.file("extdata", "hc_clustered.rds", package = "hcocena"))
+hc <- hc_example_data("clustered")
 hc <- hc_longitudinal_step1_module_donor(
   hc,
   donor_col = "donor",

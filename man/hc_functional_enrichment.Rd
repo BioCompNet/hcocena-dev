@@ -174,7 +174,7 @@ so existing scripts and exports keep working.
 }
 
 \examples{
-hc <- readRDS(system.file("extdata", "hc_clustered.rds", package = "hcocena"))
+hc <- hc_example_data("clustered")
 gmt <- tempfile(fileext = ".gmt")
 writeLines(
   c(

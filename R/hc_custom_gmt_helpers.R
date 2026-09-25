@@ -10,7 +10,11 @@
   if (base::is.list(files)) {
     files <- base::unlist(files, recursive = TRUE, use.names = TRUE)
   }
+  # as.character() drops names, and the names are the database labels the
+  # user asked for; carry them over explicitly.
+  files_nm <- base::names(files)
   files <- base::as.character(files)
+  base::names(files) <- files_nm
   if (base::length(files) == 0) {
     return(stats::setNames(base::character(0), base::character(0)))
   }

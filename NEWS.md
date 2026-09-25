@@ -1,3 +1,54 @@
+# hcocena 0.99.8
+
+## New accessors and example data
+
+- `hc_graph()` returns the integrated network and `hc_satellite()` the stored
+  downstream results (all of them, or one entry by name), so that examples,
+  the vignette and user code no longer need to reach into slots with `@`.
+- `hc_example_data()` loads the example objects shipped in `inst/extdata` at
+  a given workflow stage and points their output directory at a fresh
+  directory inside `tempdir()`. The stored objects carried the temporary
+  directory of the session that built them, so examples wrote their files
+  outside the current session's temporary directory (and, on other systems,
+  into a relative path below the working directory).
+- `inst/extdata/toy_celltype_markers.gmt` holds the four marker panels of the
+  example data, for offline examples of the enrichment, cell-type and
+  upstream functions.
+
+## Removed
+
+- `hc_get_reference_data()` is gone, and with it the `ExperimentHub`
+  suggestion. It was a placeholder for a planned `hcocenaData` package that
+  does not exist, so there was nothing it could fetch.
+
+## Bug fixes
+
+- Names given to `custom_gmt_files` / `custom_pathway_gmt`
+  (e.g. `c(CellTypes = "markers.gmt")`) are used as database labels, as
+  documented. They were dropped, so every custom file was labelled
+  `CustomEnrichment1`, `CustomCellType1`, ... regardless.
+- `hc_celltype_annotation()` falls back to the `padj`-adjusted p-value where
+  clusterProfiler's Storey q-value is `NA` (pi0 cannot be estimated, e.g. when
+  a module is tested against a single term), as `hc_functional_enrichment()`
+  already did. Such hits were silently dropped, down to "No significant
+  cell-type terms found".
+- `hc_upstream_inference()` no longer fails with "factor level is duplicated"
+  when several layers share group names. Those GFC columns are labelled with
+  their layer (as in the module heatmap) and stay separate conditions.
+- `hc_check_tf()` works through the S4 API: the targets found by
+  `hc_tf_overrep_network()` are now kept in the object
+  (`hc_satellite(hc, "tf_network_targets")`); they were lost when the result
+  was written back, so `hc_check_tf()` could never find them. It now also says
+  when `hc_tf_overrep_network()` has to be run first, or which TFs are
+  available.
+
+## Documentation
+
+- Every exported function has an example. Those that need a web service
+  (ChEA3, Cytoscape, LLM providers) are wrapped in `\donttest{}` and guarded
+  so that they do nothing when the service is unavailable.
+- The vignette has an installation section and uses accessors throughout.
+
 # hcocena 0.99.7
 
 ## Reliability of the analysis state

@@ -1681,7 +1681,7 @@
 #' @return Updated `HCoCenaExperiment` with longitudinal data in
 #'   `hc@satellite[[slot_name]]`.
 #' @examples
-#' hc <- readRDS(system.file("extdata", "hc_clustered.rds", package = "hcocena"))
+#' hc <- hc_example_data("clustered")
 #' hc <- hc_longitudinal_module_means(hc, donor_col = "donor", time_col = "timepoint")
 #' @export
 hc_longitudinal_module_means <- function(hc,
@@ -2008,7 +2008,7 @@ hc_longitudinal_module_means <- function(hc,
 #' @return Updated `HCoCenaExperiment` with endotype clustering in
 #'   `hc@satellite[[output_slot]]`.
 #' @examples
-#' hc <- readRDS(system.file("extdata", "hc_clustered.rds", package = "hcocena"))
+#' hc <- hc_example_data("clustered")
 #' hc <- hc_longitudinal_module_means(hc, donor_col = "donor", time_col = "timepoint")
 #' hc <- hc_longitudinal_endotype_clustering(hc, k = 2)
 #' @export
@@ -2370,7 +2370,7 @@ hc_longitudinal_endotype_clustering <- function(hc,
 #'
 #' @return A list with one ggplot object (`module_means`).
 #' @examples
-#' hc <- readRDS(system.file("extdata", "hc_clustered.rds", package = "hcocena"))
+#' hc <- hc_example_data("clustered")
 #' long <- hc_longitudinal_step1_module_donor(
 #'   hc,
 #'   donor_col = "donor",
@@ -2527,7 +2527,7 @@ hc_plot_longitudinal_module_means <- function(hc,
 #' @return A list with ggplot objects: `module_cluster_waves` and
 #'   `module_cluster_heatmap`.
 #' @examples
-#' hc <- readRDS(system.file("extdata", "hc_clustered.rds", package = "hcocena"))
+#' hc <- hc_example_data("clustered")
 #' long <- hc_longitudinal_step1_module_donor(
 #'   hc,
 #'   donor_col = "donor",
@@ -2784,7 +2784,7 @@ hc_plot_longitudinal_module_clusters <- function(hc,
 #'
 #' @return A named list with `pca` and `waves` ggplot objects.
 #' @examples
-#' hc <- readRDS(system.file("extdata", "hc_clustered.rds", package = "hcocena"))
+#' hc <- hc_example_data("clustered")
 #' hc <- hc_longitudinal_module_means(hc, donor_col = "donor", time_col = "timepoint")
 #' hc <- hc_longitudinal_endotype_clustering(hc, k = 2)
 #' p <- hc_plot_longitudinal_endotypes(hc, save_pdf = FALSE)
@@ -3023,7 +3023,7 @@ hc_plot_longitudinal_endotypes <- function(hc,
 #' @return Updated `HCoCenaExperiment` with CAP outputs in
 #'   `hc@satellite[[output_slot]]`.
 #' @examples
-#' hc <- readRDS(system.file("extdata", "hc_clustered.rds", package = "hcocena"))
+#' hc <- hc_example_data("clustered")
 #' long <- hc_longitudinal_step1_module_donor(
 #'   hc,
 #'   donor_col = "donor",
@@ -3273,7 +3273,7 @@ hc_longitudinal_module_cap <- function(hc,
 #'
 #' @return Updated `HCoCenaExperiment`.
 #' @examples
-#' hc <- readRDS(system.file("extdata", "hc_clustered.rds", package = "hcocena"))
+#' hc <- hc_example_data("clustered")
 #' hc <- hc_longitudinal_step1_module_donor(
 #'   hc,
 #'   donor_col = "donor",
@@ -3616,7 +3616,7 @@ hc_longitudinal_meta_clustering <- function(hc,
 #'
 #' @return List with ggplots `global_k` and `module_k`.
 #' @examples
-#' hc <- readRDS(system.file("extdata", "hc_clustered.rds", package = "hcocena"))
+#' hc <- hc_example_data("clustered")
 #' hc <- hc_longitudinal_step1_module_donor(
 #'   hc,
 #'   donor_col = "donor",
@@ -3771,7 +3771,7 @@ hc_plot_longitudinal_k_criterion <- function(hc,
 #'
 #' @return List with `cap_heatmap` ggplot.
 #' @examples
-#' hc <- readRDS(system.file("extdata", "hc_clustered.rds", package = "hcocena"))
+#' hc <- hc_example_data("clustered")
 #' long <- hc_longitudinal_step1_module_donor(
 #'   hc,
 #'   donor_col = "donor",
@@ -3927,7 +3927,7 @@ hc_plot_longitudinal_cap <- function(hc,
 #'
 #' @return List with `pca`, optional `umap`, optional `cross_tab`, and `tables`.
 #' @examples
-#' hc <- readRDS(system.file("extdata", "hc_clustered.rds", package = "hcocena"))
+#' hc <- hc_example_data("clustered")
 #' hc <- hc_longitudinal_step1_module_donor(
 #'   hc,
 #'   donor_col = "donor",
@@ -4295,7 +4295,7 @@ hc_plot_longitudinal_meta_embeddings <- function(hc,
 #' @return A list with `consensus_heatmap`, optional `consensus_k`,
 #'   optional `stability`, and optional `summary_table`.
 #' @examples
-#' hc <- readRDS(system.file("extdata", "hc_clustered.rds", package = "hcocena"))
+#' hc <- hc_example_data("clustered")
 #' hc <- hc_longitudinal_step1_module_donor(
 #'   hc,
 #'   donor_col = "donor",
@@ -4643,7 +4643,7 @@ hc_plot_longitudinal_meta_consensus <- function(hc,
 #'
 #' @return A list with one ggplot object (`meta_module_waves`).
 #' @examples
-#' hc <- readRDS(system.file("extdata", "hc_clustered.rds", package = "hcocena"))
+#' hc <- hc_example_data("clustered")
 #' hc <- hc_longitudinal_step1_module_donor(
 #'   hc,
 #'   donor_col = "donor",
@@ -5376,6 +5376,28 @@ hc_plot_longitudinal_meta_module_waves <- function(hc,
 #'
 #' @return A list with `plots`, `top_terms`, `mean_trajectories`,
 #'   `donor_trajectories`, and `score_method_used`.
+#' @examples
+#' hc <- hc_example_data("clustered")
+#' gmt <- system.file("extdata", "toy_celltype_markers.gmt", package = "hcocena")
+#' hc <- hc_functional_enrichment(
+#'   hc,
+#'   gene_sets = character(0),
+#'   custom_gmt_files = c(CellTypes = gmt),
+#'   universe = "network"
+#' )
+#' hc <- hc_longitudinal_module_means(hc, donor_col = "donor",
+#'                                    time_col = "timepoint")
+#' # Database names are title-cased by hc_functional_enrichment().
+#' waves <- hc_plot_longitudinal_enrichment_waves(
+#'   hc,
+#'   databases = "Celltypes",
+#'   top = 1,
+#'   min_term_genes = 3,
+#'   score_method = "rank_mean",
+#'   save_pdf = FALSE,
+#'   export_excel = FALSE
+#' )
+#' waves$top_terms
 #' @export
 hc_plot_longitudinal_enrichment_waves <- function(hc,
                                                   slot_name = "longitudinal_module_means",
@@ -6022,6 +6044,44 @@ hc_plot_longitudinal_enrichment_waves <- function(hc,
 #'   processed, these top-level components are flattened with slot-prefixed
 #'   names for convenient iteration, and nested per-slot outputs are also
 #'   returned in `results_by_slot`, together with `slot_info`.
+#' @examples
+#' hc <- hc_example_data("clustered")
+#' gmt <- system.file("extdata", "toy_celltype_markers.gmt", package = "hcocena")
+#' hc <- hc_functional_enrichment(
+#'   hc,
+#'   gene_sets = character(0),
+#'   custom_gmt_files = c(CellTypes = gmt),
+#'   universe = "network"
+#' )
+#' hc <- hc_longitudinal_step1_module_donor(
+#'   hc,
+#'   donor_col = "donor",
+#'   time_col = "timepoint",
+#'   time_levels = c("T1", "T2"),
+#'   k = 2,
+#'   nstart = 1,
+#'   cap_runs = 1,
+#'   impute = FALSE,
+#'   seed = 1
+#' )$hc
+#' hc <- hc_longitudinal_endotype_clustering(hc, k = 2, nstart = 1, seed = 1)
+#' hc <- hc_longitudinal_meta_clustering(
+#'   hc,
+#'   feature_source = "feature_matrix_used",
+#'   k = 2:3,
+#'   method = "kmeans",
+#'   consensus = TRUE,
+#'   seed = 1
+#' )
+#' waves <- hc_plot_longitudinal_enrichment_meta_waves(
+#'   hc,
+#'   databases = "Celltypes",
+#'   top = 1,
+#'   min_term_genes = 3,
+#'   score_method = "rank_mean",
+#'   save_pdf = FALSE,
+#'   export_excel = FALSE
+#' )
 #' @export
 hc_plot_longitudinal_enrichment_meta_waves <- function(hc,
                                                        slot_name = "longitudinal_endotypes",
@@ -6786,7 +6846,7 @@ hc_plot_longitudinal_enrichment_meta_waves <- function(hc,
 #' @return A list with `sankey` htmlwidget (or `NULL` if unavailable) and
 #'   `links` table.
 #' @examples
-#' hc <- readRDS(system.file("extdata", "hc_clustered.rds", package = "hcocena"))
+#' hc <- hc_example_data("clustered")
 #' hc <- hc_longitudinal_step1_module_donor(
 #'   hc,
 #'   donor_col = "donor",

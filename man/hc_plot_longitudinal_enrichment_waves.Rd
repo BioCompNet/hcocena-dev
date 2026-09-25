@@ -99,3 +99,26 @@ donor/timepoint in module-faceted wave plots.
 Scoring uses GSVA ssGSEA when available (\code{score_method = "ssgsea"}), with a
 rank-based fallback if GSVA is unavailable.
 }
+\examples{
+hc <- hc_example_data("clustered")
+gmt <- system.file("extdata", "toy_celltype_markers.gmt", package = "hcocena")
+hc <- hc_functional_enrichment(
+  hc,
+  gene_sets = character(0),
+  custom_gmt_files = c(CellTypes = gmt),
+  universe = "network"
+)
+hc <- hc_longitudinal_module_means(hc, donor_col = "donor",
+                                   time_col = "timepoint")
+# Database names are title-cased by hc_functional_enrichment().
+waves <- hc_plot_longitudinal_enrichment_waves(
+  hc,
+  databases = "Celltypes",
+  top = 1,
+  min_term_genes = 3,
+  score_method = "rank_mean",
+  save_pdf = FALSE,
+  export_excel = FALSE
+)
+waves$top_terms
+}

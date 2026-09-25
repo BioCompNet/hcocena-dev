@@ -15,3 +15,19 @@ Updated \code{HCoCenaExperiment}.
 \description{
 Import layout from Cytoscape (S4 API)
 }
+\examples{
+\donttest{
+# Needs a running Cytoscape instance reachable through RCy3.
+cytoscape_up <- requireNamespace("RCy3", quietly = TRUE) &&
+  isTRUE(tryCatch({
+    RCy3::cytoscapePing()
+    TRUE
+  }, error = function(e) FALSE))
+if (cytoscape_up) {
+  hc <- hc_example_data("clustered")
+  hc <- hc_export_to_cytoscape(hc, name = "hcocena example")
+  # ... arrange the network in Cytoscape, then:
+  hc <- hc_import_layout_from_cytoscape(hc)
+}
+}
+}

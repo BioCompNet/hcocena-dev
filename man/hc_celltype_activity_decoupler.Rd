@@ -89,3 +89,17 @@ Updated \code{HCoCenaExperiment}.
 \description{
 Module cell-type activity from Enrichr markers via decoupleR (S4 API)
 }
+\examples{
+if (requireNamespace("decoupleR", quietly = TRUE)) {
+  hc <- hc_example_data("clustered")
+  gmt <- system.file("extdata", "toy_celltype_markers.gmt",
+                     package = "hcocena")
+  hc <- hc_celltype_activity_decoupler(
+    hc,
+    databases = character(0),
+    custom_gmt_files = c(CellTypes = gmt),
+    export_excel = FALSE
+  )
+  names(hc_satellite(hc, "celltype_activity_decoupler"))
+}
+}

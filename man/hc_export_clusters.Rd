@@ -16,6 +16,6 @@ Updated \code{HCoCenaExperiment}.
 Export clusters (S4 API)
 }
 \examples{
-hc <- readRDS(system.file("extdata", "hc_clustered.rds", package = "hcocena"))
+hc <- hc_example_data("clustered")
 hc <- hc_export_clusters(hc)
 }

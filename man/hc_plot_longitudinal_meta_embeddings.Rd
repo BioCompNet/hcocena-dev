@@ -49,7 +49,7 @@ List with \code{pca}, optional \code{umap}, optional \code{cross_tab}, and \code
 Plot meta-clustering embeddings and endotype cross-tab
 }
 \examples{
-hc <- readRDS(system.file("extdata", "hc_clustered.rds", package = "hcocena"))
+hc <- hc_example_data("clustered")
 hc <- hc_longitudinal_step1_module_donor(
   hc,
   donor_col = "donor",

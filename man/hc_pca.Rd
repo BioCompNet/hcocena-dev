@@ -30,6 +30,6 @@ Updated \code{HCoCenaExperiment}.
 PCA plotting (S4 API)
 }
 \examples{
-hc <- readRDS(system.file("extdata", "hc_prepared.rds", package = "hcocena"))
+hc <- hc_example_data("prepared")
 hc <- hc_pca(hc)
 }

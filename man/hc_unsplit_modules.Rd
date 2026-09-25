@@ -21,7 +21,7 @@ Updated \code{HCoCenaExperiment}.
 Restores module structure from split history.
 }
 \examples{
-hc <- readRDS(system.file("extdata", "hc_clustered.rds", package = "hcocena"))
+hc <- hc_example_data("clustered")
 hc <- hc_plot_cluster_heatmap(hc, file_name = FALSE)
 hc <- hc_split_modules(hc, modules = "M1", resolution = 1)
 hc <- hc_unsplit_modules(hc, which = "all")

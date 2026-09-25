@@ -44,6 +44,6 @@ Updated \code{HCoCenaExperiment}.
 Set network cutoffs (S4 API)
 }
 \examples{
-hc <- readRDS(system.file("extdata", "hc_after_part1.rds", package = "hcocena"))
+hc <- hc_example_data("after_part1")
 hc <- hc_set_cutoff(hc, cutoff_vector = c(0.3, 0.3))
 }

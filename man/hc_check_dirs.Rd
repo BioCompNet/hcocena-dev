@@ -18,7 +18,7 @@ Updated \code{HCoCenaExperiment}.
 Iteratively calls fix_dir() on the provided working directory paths to fix them if necessary or throw an error if they are invalid.
 }
 \examples{
-hc <- readRDS(system.file("extdata", "hc_prepared.rds", package = "hcocena"))
+hc <- hc_example_data("prepared")
 hc <- hc_set_paths(
   hc,
   dir_count_data = FALSE,

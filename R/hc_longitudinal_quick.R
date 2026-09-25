@@ -170,7 +170,7 @@
 #'   `layer = "all"` (or multiple layers are supplied), returns per-layer plot
 #'   and diagnostic lists keyed by layer id.
 #' @examples
-#' hc <- readRDS(system.file("extdata", "hc_clustered.rds", package = "hcocena"))
+#' hc <- hc_example_data("clustered")
 #' res <- hc_longitudinal_step1_module_donor(
 #'   hc,
 #'   donor_col = "donor",
@@ -642,7 +642,7 @@ hc_longitudinal_step1_module_donor <- function(hc,
 #'   keyed by layer/slot, plus a `slot_info` table describing the resolved
 #'   slots.
 #' @examples
-#' hc <- readRDS(system.file("extdata", "hc_clustered.rds", package = "hcocena"))
+#' hc <- hc_example_data("clustered")
 #' hc <- hc_longitudinal_step1_module_donor(
 #'   hc,
 #'   donor_col = "donor",
@@ -780,7 +780,7 @@ hc_longitudinal_step2_meta_clustering <- function(hc,
 #'   are processed, `plots` is returned as a named list keyed by layer/slot,
 #'   plus a `slot_info` table describing the resolved slots.
 #' @examples
-#' hc <- readRDS(system.file("extdata", "hc_clustered.rds", package = "hcocena"))
+#' hc <- hc_example_data("clustered")
 #' hc <- hc_longitudinal_step1_module_donor(
 #'   hc,
 #'   donor_col = "donor",
@@ -883,7 +883,7 @@ hc_longitudinal_step3_meta_module_trajectories <- function(hc,
 #'
 #' @return Invisibly returns `x`.
 #' @examples
-#' hc <- readRDS(system.file("extdata", "hc_clustered.rds", package = "hcocena"))
+#' hc <- hc_example_data("clustered")
 #' long <- hc_longitudinal_step1_module_donor(
 #'   hc,
 #'   donor_col = "donor",
@@ -1035,7 +1035,7 @@ hc_print_longitudinal_endotypes <- function(x, show_tables = TRUE) {
 #'   `hc@satellite[[slot_name]]$meta_time_grouping` and/or the resolved
 #'   per-layer step 2 slots.
 #' @examples
-#' hc <- readRDS(system.file("extdata", "hc_clustered.rds", package = "hcocena"))
+#' hc <- hc_example_data("clustered")
 #' hc <- hc_longitudinal_step1_module_donor(
 #'   hc,
 #'   donor_col = "donor",
@@ -1337,7 +1337,7 @@ hc_add_meta_time_grouping <- function(hc,
 #' @return Character vector with heatmap column order as expected by
 #'   `hc_change_grouping_parameter()`.
 #' @examples
-#' hc <- readRDS(system.file("extdata", "hc_clustered.rds", package = "hcocena"))
+#' hc <- hc_example_data("clustered")
 #' hc <- hc_longitudinal_step1_module_donor(
 #'   hc,
 #'   donor_col = "donor",

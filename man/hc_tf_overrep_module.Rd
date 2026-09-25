@@ -24,3 +24,10 @@ Updated \code{HCoCenaExperiment}.
 \description{
 TF enrichment per module (S4 API)
 }
+\examples{
+\donttest{
+# Queries the ChEA3 web service.
+hc <- hc_example_data("clustered")
+hc <- hc_tf_overrep_module(hc, topTF = 3, topTarget = 3)
+}
+}

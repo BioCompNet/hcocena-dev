@@ -17,3 +17,15 @@ Updated \code{HCoCenaExperiment}.
 \description{
 Check TF targets (S4 API)
 }
+\examples{
+\donttest{
+# Needs the ChEA3 results of hc_tf_overrep_network(), which queries the
+# ChEA3 web service.
+hc <- hc_example_data("clustered")
+hc <- hc_tf_overrep_network(hc, topTF = 10, topTarget = 5)
+tfs <- names(hc_satellite(hc, "tf_network_targets"))
+if (length(tfs) > 0) {
+  hc <- hc_check_tf(hc, TF = tfs[[1]])
+}
+}
+}

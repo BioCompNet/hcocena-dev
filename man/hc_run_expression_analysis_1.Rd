@@ -63,6 +63,6 @@ as well as the number of nodes and edges this network comprises.
 The last parameter that is evaluated is the R^2-value of the data to a linear regression through the logged degree distribution for the given network.
 }
 \examples{
-hc <- readRDS(system.file("extdata", "hc_prepared.rds", package = "hcocena"))
+hc <- hc_example_data("prepared")
 hc <- hc_run_expression_analysis_1(hc)
 }

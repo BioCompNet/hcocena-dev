@@ -56,7 +56,7 @@ trajectories per module. Individual donors are shown in a light stroke, with
 a highlighted module mean trajectory on top.
 }
 \examples{
-hc <- readRDS(system.file("extdata", "hc_clustered.rds", package = "hcocena"))
+hc <- hc_example_data("clustered")
 long <- hc_longitudinal_step1_module_donor(
   hc,
   donor_col = "donor",

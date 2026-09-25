@@ -28,7 +28,7 @@ Character vector with heatmap column order as expected by
 Returns the column-order vector stored by \code{hc_add_meta_time_grouping()}.
 }
 \examples{
-hc <- readRDS(system.file("extdata", "hc_clustered.rds", package = "hcocena"))
+hc <- hc_example_data("clustered")
 hc <- hc_longitudinal_step1_module_donor(
   hc,
   donor_col = "donor",

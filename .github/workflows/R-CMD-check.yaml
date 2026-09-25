@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   R-CMD-check:
-    # Development happens on Windows (see CLAUDE.md) while Bioconductor builds
+    # Development happens on Windows while Bioconductor builds
     # on Linux, so both are checked.
     runs-on: ${{ matrix.config.os }}
     name: R-CMD-check (${{ matrix.config.os }})
@@ -48,6 +48,47 @@ jobs:
           # The package currently checks clean, so keep it that way: a new
           # warning should fail the build rather than accumulate quietly.
           error-on: '"warning"'
+
+  bioc-devel:
+    # New packages are reviewed against Bioconductor devel, which runs on a
+    # newer R than the release jobs above. The official devel image carries
+    # the matching R and Bioconductor versions.
+    runs-on: ubuntu-latest
+    name: R CMD check + BiocCheck (Bioconductor devel)
+    container: bioconductor/bioconductor_docker:devel
+
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+      R_KEEP_PKG_SOURCE: yes
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          Rscript -e 'BiocManager::install(c("remotes", "rcmdcheck", "BiocCheck"), ask = FALSE, update = FALSE)'
+          Rscript -e 'remotes::install_deps(".", dependencies = TRUE, repos = BiocManager::repositories(), upgrade = "never")'
+        shell: bash
+
+      - name: Session info
+        run: Rscript -e 'sessionInfo(); BiocManager::version()'
+        shell: bash
+
+      - name: R CMD check
+        run: |
+          Rscript -e 'res <- rcmdcheck::rcmdcheck(args = c("--no-manual", "--as-cran"), build_args = "--no-manual", error_on = "warning", check_dir = "check")'
+        shell: bash
+
+      - name: BiocCheck
+        run: |
+          tarball=$(ls -1 check/hcocena_*.tar.gz 2>/dev/null | head -n 1)
+          if [ -z "$tarball" ]; then R CMD build --no-manual . && tarball=$(ls -1 hcocena_*.tar.gz | head -n 1); fi
+          Rscript -e "res <- BiocCheck::BiocCheck('${tarball}', \`new-package\` = TRUE); \
+            n_err <- length(res[['error']]); n_warn <- length(res[['warning']]); \
+            cat(sprintf('BiocCheck: %d ERRORS, %d WARNINGS, %d NOTES\n', \
+              n_err, n_warn, length(res[['note']]))); \
+            if (n_err > 0 || n_warn > 0) quit(status = 1)"
+        shell: bash
 
   BiocCheck:
     # Bioconductor's own checks, which R CMD check does not cover.

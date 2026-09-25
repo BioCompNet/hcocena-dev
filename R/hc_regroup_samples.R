@@ -401,7 +401,7 @@
 #'   in a `<voi>_old` column. Default is `FALSE`.
 #' @return Updated `HCoCenaExperiment`.
 #' @examples
-#' hc <- readRDS(system.file("extdata", "hc_clustered.rds", package = "hcocena"))
+#' hc <- hc_example_data("clustered")
 #' hc <- hc_cut_hclust(hc, by = "module", k = c(2, 2), save = FALSE)
 #' @export
 hc_cut_hclust <- function(hc, by = "all", set = "all", method = "complete",
