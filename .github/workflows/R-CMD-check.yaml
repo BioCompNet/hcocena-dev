@@ -60,9 +60,22 @@ jobs:
     env:
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
       R_KEEP_PKG_SOURCE: yes
+      # A Suggests package that currently fails to build on Bioconductor devel
+      # is missing from the devel repository until it is fixed upstream (in
+      # September 2026: decoupleR and dorothea, whose vignettes download from
+      # an unavailable server). hcocena only uses its Suggests conditionally,
+      # so check without them instead of failing on someone else's build.
+      _R_CHECK_FORCE_SUGGESTS_: false
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Use the Bioconductor build machines' R settings
+        run: |
+          curl -fsSL https://bioconductor.org/checkResults/devel/bioc-LATEST/Renviron.bioc \
+            -o "$HOME/.Renviron.bioc"
+          echo "R_ENVIRON_USER=$HOME/.Renviron.bioc" >> "$GITHUB_ENV"
+        shell: bash
 
       - name: Install dependencies
         run: |
@@ -71,12 +84,16 @@ jobs:
         shell: bash
 
       - name: Session info
-        run: Rscript -e 'sessionInfo(); BiocManager::version()'
+        run: |
+          Rscript -e 'sessionInfo(); BiocManager::version()'
+          Rscript -e 'sug <- c("decoupleR", "dorothea", "progeny", "limma", "RCy3", "ellmer"); print(setNames(vapply(sug, requireNamespace, logical(1), quietly = TRUE), sug))'
         shell: bash
 
+      # Same options as the Bioconductor single package builder: no
+      # --as-cran, which adds CRAN-only checks (e.g. it flags `BiocType`).
       - name: R CMD check
         run: |
-          Rscript -e 'res <- rcmdcheck::rcmdcheck(args = c("--no-manual", "--as-cran"), build_args = "--no-manual", error_on = "warning", check_dir = "check")'
+          Rscript -e 'res <- rcmdcheck::rcmdcheck(args = "--no-manual", build_args = "--no-manual", error_on = "warning", check_dir = "check")'
         shell: bash
 
       - name: BiocCheck
