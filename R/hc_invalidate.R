@@ -38,27 +38,30 @@
   from <- base::match.arg(from)
   dropped <- base::character(0)
 
-  clear_part <- function(which_part) {
-    if (base::length(hc@layer_results) == 0) {
-      return(FALSE)
-    }
+  # Empties `which_part` in every layer result; returns the updated object and
+  # whether anything was removed.
+  clear_part <- function(hc, which_part) {
     touched <- FALSE
     for (nm in base::names(hc@layer_results)) {
       lr <- hc@layer_results[[nm]]
       if (base::length(methods::slot(lr, which_part)) > 0) {
         methods::slot(lr, which_part) <- S4Vectors::SimpleList()
-        hc@layer_results[[nm]] <<- lr
+        hc@layer_results[[nm]] <- lr
         touched <- TRUE
       }
     }
-    touched
+    list(hc = hc, touched = touched)
   }
 
   if (from %in% c("data")) {
-    if (clear_part("part1")) dropped <- c(dropped, "correlations")
+    res <- clear_part(hc, "part1")
+    hc <- res$hc
+    if (res$touched) dropped <- c(dropped, "correlations")
   }
   if (from %in% c("data", "cutoff")) {
-    if (clear_part("part2")) dropped <- c(dropped, "layer networks and GFCs")
+    res <- clear_part(hc, "part2")
+    hc <- res$hc
+    if (res$touched) dropped <- c(dropped, "layer networks and GFCs")
   }
   if (from %in% c("data", "cutoff", "integration")) {
     if (base::nrow(hc@integration@combined_edgelist) > 0 ||

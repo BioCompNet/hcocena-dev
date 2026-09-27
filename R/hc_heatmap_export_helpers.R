@@ -760,11 +760,12 @@
   ok <- .hc_output_payload_valid(path, min_bytes = min_bytes)
   if (!ok) {
     base::warning(
-      base::sprintf(
-        "Expected output %s'%s' is missing, empty, or invalid after writing. If the save folder is on a synced drive (Sciebo/OneDrive), the sync client may have interrupted the write; try a local output folder.",
-        if (!base::is.null(label)) base::paste0(label, " ") else "",
-        path
-      ),
+      "Expected output ",
+      if (!base::is.null(label)) label else "",
+      if (!base::is.null(label)) " " else "",
+      "'", path, "' is missing, empty, or invalid after writing. ",
+      "If the save folder is on a synced drive (Sciebo/OneDrive), the sync ",
+      "client may have interrupted the write; try a local output folder.",
       call. = FALSE
     )
   }

@@ -131,7 +131,7 @@ hc_list_llm_models <- function(provider = "all",
     detail <- base::substr(base::gsub("\\s+", " ", base::as.character(txt)), 1, 300)
     stop(
       "HTTP ", httr::status_code(resp),
-      if (base::nzchar(detail)) base::paste0(" - ", detail) else ""
+      if (base::nzchar(detail)) " - " else "", detail
     )
   }
   jsonlite::fromJSON(txt, simplifyVector = FALSE)

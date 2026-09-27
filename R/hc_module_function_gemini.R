@@ -780,18 +780,21 @@ hc_module_function_vllm <- function(...) {
         if (!isTRUE(rag_options$continue_on_error)) {
           stop(e)
         }
-        rag_error_message <<- base::conditionMessage(e)
-        if (isTRUE(verbose)) {
-          message(
-            "DoRAG retrieval failed for `",
-            label,
-            "`; continuing without RAG passages: ",
-            rag_error_message
-          )
-        }
-        NULL
+        e
       }
     )
+    if (inherits(rag_raw, "error")) {
+      rag_error_message <- base::conditionMessage(rag_raw)
+      if (isTRUE(verbose)) {
+        message(
+          "DoRAG retrieval failed for `",
+          label,
+          "`; continuing without RAG passages: ",
+          rag_error_message
+        )
+      }
+      rag_raw <- NULL
+    }
     if (base::is.null(rag_raw)) {
       rag_result <- list(
         query = rag_query_used,
@@ -1294,16 +1297,11 @@ hc_module_function_vllm <- function(...) {
   }
 
   out <- list()
-  add <- function(key, df) {
-    key <- base::as.character(key)
-    key <- key[!base::is.na(key) & base::nzchar(key)]
-    for (k in base::unique(key)) out[[k]] <<- df
-  }
   for (col in base::intersect(base::c("module_label", "cluster"), base::colnames(tbl))) {
     for (m in base::unique(base::as.character(tbl[[col]]))) {
       df <- tbl[base::as.character(tbl[[col]]) %in% m, , drop = FALSE]
       if (base::nrow(df) > top) df <- df[base::seq_len(top), , drop = FALSE]
-      add(m, df)
+      if (!base::is.na(m) && base::nzchar(m)) out[[m]] <- df
     }
   }
   out
@@ -1398,7 +1396,8 @@ hc_module_function_vllm <- function(...) {
     stop(
       "DoRAG retrieval failed with HTTP ",
       httr::status_code(resp),
-      if (base::nzchar(txt)) base::paste0(": ", stringr::str_trunc(stringr::str_squish(txt), 300)) else "",
+      if (base::nzchar(txt)) ": " else "",
+      if (base::nzchar(txt)) stringr::str_trunc(stringr::str_squish(txt), 300) else "",
       call. = FALSE
     )
   }

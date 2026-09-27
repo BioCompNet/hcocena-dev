@@ -1,7 +1,7 @@
 Package: hcocena
 Title: Horizontal Integration and Analysis of Multiple Transcriptomics
         Datasets
-Version: 0.99.8
+Version: 0.99.10
 Authors@R: c(
     person(given = "Lisa",
            family = "Holsten",
@@ -33,7 +33,7 @@ Description: Tools for the joint analysis of multiple transcriptomics datasets
 License: GPL (>= 3)
 Encoding: UTF-8
 Depends: R (>= 4.5.0)
-biocViews: Software, Clustering, GeneExpression, Network, NetworkInference,
+biocViews: Software, Clustering, GeneExpression, KEGG, Network, NetworkInference,
         Transcriptomics, WorkflowStep
 BiocType: Software
 URL: https://github.com/BioCompNet/hcocena
