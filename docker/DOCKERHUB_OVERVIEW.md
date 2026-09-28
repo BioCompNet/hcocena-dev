@@ -23,10 +23,11 @@ integration and downstream analysis of transcriptomics datasets.
 ## Recommended tags
 
 - `latest` for the current image and quick-start commands
-- `0.99.7` for a pinned, reproducible setup
+- `0.99.10` for a pinned, reproducible setup
 
 Older tags still kept for older reproducible runs:
 
+- `0.99.7`
 - `1.100`
 - `1.99`
 - `1.98`
@@ -52,7 +53,7 @@ Run RStudio Server:
 docker run --rm -p 8787:8787 -e PASSWORD=hcocena therealtomek/hcocena:latest
 ```
 
-For reproducible runs, replace `latest` with a pinned tag such as `0.99.7`.
+For reproducible runs, replace `latest` with a pinned tag such as `0.99.10`.
 
 Then open:
 
@@ -67,7 +68,8 @@ Login:
 
 ## Project links
 
-- GitHub repository: https://github.com/BioCompNet/hcocena
+- Package (Bioconductor submission): https://github.com/BioCompNet/hcocena
+- Docker setup and development repository: https://github.com/BioCompNet/hcocena-dev
 - Docker Hub tags: https://hub.docker.com/r/therealtomek/hcocena/tags
 
 ## Notes
