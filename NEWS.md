@@ -1,3 +1,11 @@
+# hcocena 0.99.11
+
+- `citation("hcocena")` also lists the STAR Protocols paper (Holsten et al.
+  2024) next to the method paper (Oestreich et al. 2022).
+- The vignette ends with a "Citing hcocena" section.
+- The README maps the function names used in both papers (e.g.
+  `functional_enrichment()`, `hcobject`) to their `hc_` counterparts.
+
 # hcocena 0.99.10
 
 - Condition messages are built from their parts instead of with `paste()`,

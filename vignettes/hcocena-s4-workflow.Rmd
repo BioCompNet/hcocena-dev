@@ -474,6 +474,23 @@ file.copy(
 They are templates rather than reproducible documents: they point at your own
 count and annotation files and contact the services listed above.
 
+# Citing hcocena
+
+The method -- per-layer co-expression networks, group fold changes,
+cutoff selection by scale-free topology, and integration of the layer
+networks -- is described in Oestreich et al. (2022), *Bioinformatics*
+38(20):4727-4734, [doi:10.1093/bioinformatics/btac589](https://doi.org/10.1093/bioinformatics/btac589).
+A step-by-step protocol for a full analysis is given in Holsten et al.
+(2024), *STAR Protocols* 5(1):102922,
+[doi:10.1016/j.xpro.2024.102922](https://doi.org/10.1016/j.xpro.2024.102922).
+Both papers describe the earlier function names without the `hc_` prefix;
+each of those functions has an `hc_` counterpart here (for example
+`functional_enrichment()` is now `hc_functional_enrichment()`).
+
+```{r citation}
+citation("hcocena")
+```
+
 # Session information
 
 ```{r session-info}

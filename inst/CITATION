@@ -1,4 +1,4 @@
-citHeader("To cite package 'hcocena' use:")
+citHeader("To cite hcocena, please use the method paper and, where the protocol was followed, the STAR Protocols paper:")
 
 bibentry(
   bibtype = "Article",
@@ -24,5 +24,29 @@ bibentry(
     "Ulas T (2022). hCoCena: horizontal integration and analysis of",
     "transcriptomics datasets. Bioinformatics 38(20):4727-4734.",
     "doi:10.1093/bioinformatics/btac589"
+  )
+)
+
+bibentry(
+  bibtype = "Article",
+  title = "hCoCena: A toolbox for network-based co-expression analysis and horizontal integration of transcriptomic datasets",
+  author = c(
+    person("Lisa", "Holsten"),
+    person("Kilian", "Dahm"),
+    person("Marie", "Oestreich"),
+    person("Matthias", "Becker"),
+    person("Thomas", "Ulas")
+  ),
+  journal = "STAR Protocols",
+  year = "2024",
+  volume = "5",
+  number = "1",
+  pages = "102922",
+  doi = "10.1016/j.xpro.2024.102922",
+  textVersion = paste(
+    "Holsten L, Dahm K, Oestreich M, Becker M, Ulas T (2024). hCoCena: A",
+    "toolbox for network-based co-expression analysis and horizontal",
+    "integration of transcriptomic datasets. STAR Protocols 5(1):102922.",
+    "doi:10.1016/j.xpro.2024.102922"
   )
 )

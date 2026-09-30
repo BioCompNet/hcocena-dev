@@ -191,14 +191,53 @@ library(CALIBERrfimpute)
 
 ## Documentation and references
 
-- Bioinformatics paper:
+- Method paper: Oestreich et al. (2022), *Bioinformatics*,
   https://doi.org/10.1093/bioinformatics/btac589
-- STAR Protocol:
-  https://star-protocols.cell.com/protocols/3341
+- Step-by-step protocol: Holsten et al. (2024), *STAR Protocols*,
+  https://doi.org/10.1016/j.xpro.2024.102922
+
+### Coming from the papers
+
+Both papers use the earlier hCoCena interface, in which the functions worked
+on a global `hcobject` and had no `hc_` prefix (repository
+`MarieOestreich/hCoCena`, Docker image `mo126/hcocena`). In this package every
+step takes and returns an `HCoCenaExperiment` (`hc <- hc_step(hc, ...)`), and
+the current Docker image is `therealtomek/hcocena`. The functions map as
+follows:
+
+| In the papers | In this package |
+|---|---|
+| `init_wd()`, `check_dirs()`, `init_save_folder()` | `hc_init()`, `hc_set_paths()`, `hc_check_dirs()`, `hc_init_save_folder()` |
+| `define_layers()`, `read_data()` | `hc_define_layers()`, `hc_read_data()` |
+| `set_supp_files()`, `read_supplementary()` | `hc_set_supp_files()`, `hc_read_supplementary()` |
+| `set_global_settings()`, `set_layer_settings()` | `hc_set_global_settings()`, `hc_set_layer_settings()` |
+| `suggest_topvar()` | `hc_suggest_topvar()` |
+| `run_expression_analysis_1()`, `plot_cutoffs()`, `set_cutoff()`, `plot_deg_dist()` | `hc_run_expression_analysis_1()`, `hc_plot_cutoffs()`, `hc_set_cutoff()`, `hc_plot_deg_dist()` |
+| `run_expression_analysis_2()` | `hc_run_expression_analysis_2()` |
+| `build_integrated_network()`, `plot_integrated_network()` | `hc_build_integrated_network()`, `hc_plot_integrated_network()` |
+| `cluster_calculation()`, `plot_cluster_heatmap()` | `hc_cluster_calculation()`, `hc_plot_cluster_heatmap()` |
+| `functional_enrichment()` | `hc_functional_enrichment()` |
+| `TF_overrep_module()`, `TF_overrep_network()`, `check_tf()` | `hc_tf_overrep_module()`, `hc_tf_overrep_network()`, `hc_check_tf()` |
+| `find_hubs()` | `hc_find_hubs()` |
+| `change_grouping_parameter()`, `cut_hclust()` | `hc_change_grouping_parameter()`, `hc_cut_hclust()` |
+| `write_session_info()` | `hc_write_session_info()` |
+
+Results that the papers read from `hcobject` are available through
+accessors such as `hc_clusters()`, `hc_gene_to_cluster()`, `hc_graph()` and
+`hc_satellite()`.
 
 ## Citation
 
-Marie Oestreich, Lisa Holsten, Shobhit Agrawal, Kilian Dahm, Philipp Koch,
-Han Jin, Matthias Becker, Thomas Ulas (2022). "hCoCena: horizontal integration
-and analysis of transcriptomics datasets." *Bioinformatics* 38(20):4727-4734.
+Please cite the method paper, and the protocol where you followed it:
+
+Oestreich M, Holsten L, Agrawal S, Dahm K, Koch P, Jin H, Becker M, Ulas T
+(2022). "hCoCena: horizontal integration and analysis of transcriptomics
+datasets." *Bioinformatics* 38(20):4727-4734.
 doi:10.1093/bioinformatics/btac589
+
+Holsten L, Dahm K, Oestreich M, Becker M, Ulas T (2024). "hCoCena: A toolbox
+for network-based co-expression analysis and horizontal integration of
+transcriptomic datasets." *STAR Protocols* 5(1):102922.
+doi:10.1016/j.xpro.2024.102922
+
+In R: `citation("hcocena")`.
