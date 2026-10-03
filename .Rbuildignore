@@ -29,3 +29,4 @@
 ^scripts/
 ^CLAUDE\.md$
 ^test_llm_claude\.R$
+^omnipathr-log$

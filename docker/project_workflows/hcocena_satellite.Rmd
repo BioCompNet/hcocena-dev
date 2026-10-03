@@ -379,90 +379,135 @@ hc <- hc_plot_cluster_heatmap(
 )
 ```
 
+<!-- ## Upstream regulator and pathway inference {#sat-upstream} -->
+
+  Links each module to the transcription factors and signalling pathways that most likely drive it. `hc_upstream_inference()` tests, per module, whether the targets of a regulator are over-represented among the module genes, against all network genes as background (TF regulons from CollecTRI, or DoRothEA when CollecTRI cannot be loaded; pathway-responsive genes from PROGENy). The p-values are corrected over all module x regulator tests.
+
+  For every significant link the result also shows
+  - how the module's targets of the regulator move per condition (`score`, sign of regulation taken into account) and how many of them agree (`consistency`),
+  - in which conditions the regulator is active (decoupleR activity over all network genes; marked with `*` in the per-condition heatmaps),
+  - whether the TF is itself a gene of the module and follows its profile (`regulator_in_module`, `regulator_cor`; framed in the heatmaps),
+  - regulators that only repeat a better-ranked one (`redundant_with`; left out of the plots).
+
+  Instead of the GFCs you can score specific contrasts (`activity_input = "fc"` together with `fc_comparisons = c("groupA_vs_groupB")`). Custom pathway collections can be added via `custom_pathway_gmt`.
+  Requires the suggested packages `decoupleR`, `progeny` and `dorothea` (or `OmnipathR` for CollecTRI).
+  For parameter details, refer to `?hcocena::hc_upstream_inference`.
+
+```{r upstream inference, eval = FALSE, fig.width = 13, fig.height = 10, out.width = "100%"}
+
+hc <- hc_upstream_inference(
+  hc,
+  resources = c("TF", "Pathway"),
+  tf_resource = "auto",
+  activity_input = "gfc",
+  top = 5,
+  qval = 0.05,
+  min_overlap = 3,
+  clusters = "all",
+  save_pdf = TRUE
+)
+
+# hc@satellite$upstream_inference holds the result tables
+
+```
+
+
+<!-- ## Module knowledge network {#sat-knowledge-network} -->
+
+  One figure per page that reads from cause to function: module heatmap (with the number of genes per module) | upstream regulators -> modules -> enriched terms. Run `hc_functional_enrichment()` and `hc_upstream_inference()` first.
+  - Regulators (TFs as circles, PROGENy signalling pathways as diamonds) point at the module they act on; red = activates its targets in the module, blue (T-end) = represses, grey = mixed. A tag in module colour marks a TF whose own gene lies in that module.
+  - Enriched terms whose genes lie mostly in a better term of the same module are left out (`collapse_redundant_terms`).
+  - The per-module pages grey out the other modules and link each regulator to the terms over-represented among its targets (dashed; `link_min_share`).
+  - Heatmap cells and module boxes are square; `max_enrichment_per_module` and `max_upstream_per_module` keep large networks readable.
+  For parameter details, refer to `?hcocena::hc_plot_enrichment_upstream_network`.
+
+```{r knowledge network, eval = FALSE, fig.width = 14, fig.height = 7, out.width = "100%"}
+
+hc <- hc_plot_enrichment_upstream_network(
+  hc,
+  enrichment_mode = "selected",
+  upstream_mode = "selected",
+  clusters = "all",
+  max_enrichment_per_module = 5,
+  max_upstream_per_module = 5,
+  collapse_redundant_terms = TRUE,
+  link_min_share = 0.25,
+  save_pdf = TRUE,
+  pdf_name = "Module_Knowledge_Network.pdf"
+)
+
+```
+
+
 <!-- ## AI-assisted module interpretation {#sat-llm} -->
 
-Purpose: summarize module biology with an LLM. One generic function,
-`hc_module_function_llm()`, drives every provider — pick the model via
-`provider`/`model`, give `base_url` for a local server, and `api_key` when needed.
+Purpose: summarize module biology with an LLM. One function,
+`hc_llm_enrichment()`, drives every provider; `hc_plot_llm_enrichment()` plots
+the result next to the module heatmap. Four plots are produced, each from its
+own request:
+1. General processes - genes only, no context
+2. Contextual state - genes + context
+3. Key regulators - genes + context
+4. Processes with enrichment - genes + context + significant terms of
+   `hc_functional_enrichment()` (run it first; `evidence = "all"` also adds
+   upstream regulators and DoRAG literature)
 
 Key parameters:
-- `module`: one label (e.g. `"M1"`) or `"all"`.
-- `biological_context`: study context to guide interpretation.
-- `system_instruction`: prompt constraints.
-- `provider`: `"gemini"`, `"claude"`, `"openai"`, or `"vllm"` (local server).
-- `model` / `base_url` / `api_key`: model code, local endpoint, API key.
+- `modules`: `"all"` or module labels (e.g. `c("M1", "M2")`).
+- `context`: study context to guide the interpretation.
+- `system_prompt`: optional own prompt (`NULL` = neutral default prompt).
+- `provider`: `"claude"`, `"openai"`, `"gemini"`, `"local"` (vLLM server) or
+  `"manual"` (no API key: copy the prompt into a web chat, then `hc_llm_import()`).
+- `model` / `base_url` / `api_key`: model code, local endpoint, API key
+  (default: the key from the environment, e.g. `ANTHROPIC_API_KEY`).
 
 List the models each provider currently offers:
 
 ```{r eval=FALSE, message=TRUE, warning=FALSE}
 hc_list_llm_models(c("gemini", "openai", "claude"))
-hc_list_llm_models("vllm", base_url = "http://bn-hl-compute-8mi210-03.dzne.de:8000/v1")
+hc_list_llm_models("local", base_url = "http://bn-hl-compute-8mi210-03.dzne.de:8000/v1")
 ```
 
+Option A, with an API key or a local server:
+
 ```{r eval=FALSE, fig.width=13, fig.height=10, out.width="100%", message=TRUE, warning=FALSE}
-biological_context <- "maturation of monocytes in preterm infants over the first year of life"
+context <- "maturation of monocytes in preterm infants over the first year of life"
 
-gemini_api_key    <- Sys.getenv("GEMINI_API_KEY")
-openai_api_key    <- Sys.getenv("OPENAI_API_KEY")
-anthropic_api_key <- Sys.getenv("ANTHROPIC_API_KEY")
+hc <- hc_llm_enrichment(hc, modules = "all", context = context,
+                        provider = "claude", model = "claude-opus-4-6")
 
-system_instruction <- paste(
-  "You are an expert transcriptomics analyst.",
-  "Task: Infer the overarching biological program from the provided list of co-expressed genes.",
-  "Use the provided biological context to inform your interpretation and synthesize it into a precise biological description.",
-  "For the 'contextual_state' field, strictly describe the specific cellular or transcriptional state.",
-  "Constraint 1: Start your descriptions directly with the relevant nouns or biological terms. Completely omit filler phrases like 'this module' or 'the genes'.",
-  "Constraint 2: Formulate your answer as a direct biological interpretation based on the supplied genes, without claiming any statistical enrichment tests.",
-  "Output: Return ONLY a valid JSON object matching the requested schema. Do not output markdown formatting, code blocks, or any conversational text."
-)
+# Local vLLM server instead:
+# hc <- hc_llm_enrichment(hc, context = context, provider = "local",
+#                         model = "/data/qwen3.5-35b-a3b",
+#                         base_url = "http://bn-hl-compute-8mi210-03.dzne.de:8000/v1",
+#                         slot_name = "llm_enrichment_qwen")
+```
 
-## Configure one entry per model: provider + model, plus base_url (for a local
-## server) and api_key where needed. Comment lines in/out to (de)activate models.
-models <- list(
-  gemini = list(provider = "gemini", model = "gemini-3.1-pro-preview",
-                api_key = gemini_api_key),
+Option B, without an API key (web chat): one prompt per request type (three)
+is saved as a text file (and copied to the clipboard on a local R session;
+RStudio Server in Docker has no clipboard). Paste each into a NEW chat, save
+the JSON answer and import it; repeat for every part.
 
-  qwen   = list(provider = "vllm",   model = "/data/qwen3.5-35b-a3b",
-                base_url = "http://bn-hl-compute-8mi210-03.dzne.de:8000/v1",
-                api_key  = "EMPTY",
-                temperature = 0.8, timeout_sec = 600, max_genes = 1250),
+```{r eval=FALSE, message=TRUE, warning=FALSE}
+hc <- hc_llm_enrichment(hc, context = context, provider = "manual")
+# The prompts are in the output folder (llm_request_<id>_part1/2/3.txt).
+# For every part: paste it into a NEW chat, save the answer, import it.
+hc <- hc_llm_import(hc, file = "answer_part1.txt")  # genes only
+hc <- hc_llm_import(hc, file = "answer_part2.txt")  # genes + context
+hc <- hc_llm_import(hc, file = "answer_part3.txt")  # genes + context + enrichment
+# local R session: hc <- hc_llm_import(hc) reads the answer from the clipboard
+```
 
-  claude = list(provider = "claude", model = "claude-opus-4-6",
-                api_key = anthropic_api_key)
+Plot (long terms wrap onto at most two lines; the heatmap cells stay square):
 
-  # openai = list(provider = "openai", model = "gpt-4.1-mini",
-  #               api_key = openai_api_key)
-)
-
-## One generic call per model; each result is stored in its own satellite slot.
-for (nm in names(models)) {
-  message("== LLM module function: ", nm, " ==")
-  hc <- tryCatch(
-    do.call(hc_module_function_llm, c(
-      list(
-        hc                 = hc,
-        module             = "all",
-        biological_context = biological_context,
-        system_instruction = system_instruction,
-        slot_name          = paste0("llm_module_function_", nm),
-        continue_on_error  = TRUE
-      ),
-      models[[nm]]
-    )),
-    error = function(e) {
-      warning("Skipping '", nm, "': ", conditionMessage(e), call. = FALSE)
-      hc
-    }
-  )
-}
-
-## Plot one model's interpretation (slot = llm_module_function_<name>).
-plots <- hc_plot_module_function_llm(hc, slot_name = "llm_module_function_gemini")
+```{r eval=FALSE, fig.width=13, fig.height=10, out.width="100%", message=TRUE, warning=FALSE}
+plots <- hc_plot_llm_enrichment(hc)
 print(plots$general_processes)
 print(plots$contextual_state)
 print(plots$key_regulators)
+print(plots$grounded_processes)   # with enrichment (needs hc_functional_enrichment())
 
-# View(hc@satellite$llm_module_function_gemini_summary)
+# View(hc_satellite(hc, "llm_enrichment_summary"))  # incl. supporting_evidence
 ```
 
 

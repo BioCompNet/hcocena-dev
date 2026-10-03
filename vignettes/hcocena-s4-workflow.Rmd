@@ -446,12 +446,14 @@ vignette is being built, and are therefore not shown above:
   (`hc_tf_overrep_module()`, `hc_check_tf()`),
 - cell-type annotation from **Enrichr** libraries
   (`hc_celltype_annotation()`, `hc_celltype_activity_decoupler()`),
-- upstream regulator and pathway inference via **DoRothEA/PROGENy**
+- upstream regulator and pathway inference via **CollecTRI/DoRothEA/PROGENy**
   (`hc_upstream_inference()`),
 - network layout round-trips with **Cytoscape**
   (`hc_export_to_cytoscape()`),
-- LLM-based module interpretation (`hc_module_function_llm()`), optionally
-  grounded in retrieved literature and in the enrichment terms computed above.
+- LLM-based module interpretation (`hc_llm_enrichment()`) through the API of
+  Claude, OpenAI, Gemini or a local vLLM server -- or, without an API key, by
+  pasting the request into any provider's web chat and reading the answer back
+  with `hc_llm_import()`.
 
 The complete walkthroughs are installed with the package as R Markdown
 templates:

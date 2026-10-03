@@ -2,7 +2,7 @@
 #'
 #' Queries the model-listing endpoint of each selected provider and returns the
 #' available models as a data frame. Supports the same providers as
-#' [hc_module_function_llm()]: Gemini, Claude (Anthropic), OpenAI/ChatGPT, and a
+#' [hc_llm_enrichment()]: Gemini, Claude (Anthropic), OpenAI/ChatGPT, and a
 #' local OpenAI-compatible server (vLLM).
 #'
 #' @param provider Character vector of providers to query. One or more of

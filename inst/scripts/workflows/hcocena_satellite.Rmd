@@ -296,12 +296,16 @@ hc <- hc_check_tf(hc, TF = "IRF7")
 
 ## Upstream regulator and pathway inference
 
-  Infers, per module, **how active** upstream regulators are rather than only which ones are over-represented. `hc_upstream_inference()` runs `decoupleR` with DoRothEA (transcription factor regulons) and PROGENy (pathway footprints) on the module Group-Fold-Changes, so every result carries a direction (activated vs. repressed).
+  Links each module to the transcription factors and signalling pathways that most likely drive it. `hc_upstream_inference()` tests, per module, whether the targets of a regulator are over-represented among the module genes, against all network genes as background (TF regulons from CollecTRI, or DoRothEA when CollecTRI cannot be loaded; pathway-responsive genes from PROGENy). The p-values are corrected over all module x regulator tests.
 
-  This complements `hc_tf_overrep_module()`: that function asks ChEA3 which transcription factors are over-represented among a module's genes (a set-overlap question), while this one scores regulator activity from the expression changes themselves.
+  For every significant link the result also shows
+  - how the module's targets of the regulator move per condition (`score`, sign of regulation taken into account) and how many of them agree (`consistency`),
+  - in which conditions the regulator is active (decoupleR activity over all network genes; marked with `*` in the per-condition heatmaps),
+  - whether the TF is itself a gene of the module and follows its profile (`regulator_in_module`, `regulator_cor`; framed in the heatmaps),
+  - regulators that only repeat a better-ranked one (`redundant_with`; left out of the plots).
 
-  Instead of the GFCs you can score specific contrasts (`activity_input = "fc"` together with `fc_comparisons = c("groupA_vs_groupB")`) or layer-wise mean expression (`activity_input = "expression"`). Custom pathway collections can be added via `custom_pathway_gmt`.
-  Requires the suggested packages `decoupleR`, `dorothea` and `progeny`.
+  Instead of the GFCs you can score specific contrasts (`activity_input = "fc"` together with `fc_comparisons = c("groupA_vs_groupB")`). Custom pathway collections can be added via `custom_pathway_gmt`.
+  Requires the suggested packages `decoupleR`, `progeny` and `dorothea` (or `OmnipathR` for CollecTRI).
   For parameter details, refer to `?hcocena::hc_upstream_inference`.
 
 ```{r upstream inference, eval = FALSE, fig.width = 13, fig.height = 10, out.width = "100%"}
@@ -309,10 +313,11 @@ hc <- hc_check_tf(hc, TF = "IRF7")
 hc <- hc_upstream_inference(
   hc,
   resources = c("TF", "Pathway"),
+  tf_resource = "auto",
   activity_input = "gfc",
   top = 5,
   qval = 0.05,
-  tf_confidence = c("A", "B", "C"),
+  min_overlap = 3,
   clusters = "all",
   save_pdf = TRUE
 )
@@ -324,26 +329,101 @@ hc <- hc_upstream_inference(
 
 ## Module knowledge network
 
-  Combines modules, their enriched terms and the inferred upstream regulators into a single graph, so you can see which regulators and which functional terms converge on the same module. Run `hc_functional_enrichment()` and `hc_upstream_inference()` first.
-  Use `max_enrichment_per_module` and `max_upstream_per_module` to keep the network readable.
+  One figure per page that reads from cause to function: module heatmap (with the number of genes per module) | upstream regulators -> modules -> enriched terms. Run `hc_functional_enrichment()` and `hc_upstream_inference()` first.
+  - Regulators (TFs as circles, PROGENy signalling pathways as diamonds) point at the module they act on; red = activates its targets in the module, blue (T-end) = represses, grey = mixed. A tag in module colour marks a TF whose own gene lies in that module.
+  - Enriched terms whose genes lie mostly in a better term of the same module are left out (`collapse_redundant_terms`).
+  - The per-module pages grey out the other modules and link each regulator to the terms over-represented among its targets (dashed; `link_min_share`).
+  - Heatmap cells and module boxes are square; `max_enrichment_per_module` and `max_upstream_per_module` keep large networks readable.
   For parameter details, refer to `?hcocena::hc_plot_enrichment_upstream_network`.
 
-```{r knowledge network, eval = FALSE, fig.width = 14, fig.height = 11, out.width = "100%"}
+```{r knowledge network, eval = FALSE, fig.width = 14, fig.height = 7, out.width = "100%"}
 
 hc <- hc_plot_enrichment_upstream_network(
   hc,
   enrichment_mode = "selected",
   upstream_mode = "selected",
   clusters = "all",
-  max_enrichment_per_module = 3,
-  max_upstream_per_module = 3,
-  label_mode = "both",
+  max_enrichment_per_module = 5,
+  max_upstream_per_module = 5,
+  collapse_redundant_terms = TRUE,
+  link_min_share = 0.25,
   save_pdf = TRUE,
   pdf_name = "Module_Knowledge_Network.pdf"
 )
 
 ```
 
+
+## AI-assisted module interpretation
+
+Purpose: summarize module biology with an LLM. One function,
+`hc_llm_enrichment()`, drives every provider; `hc_plot_llm_enrichment()` plots
+the result next to the module heatmap. Four plots are produced, each from its
+own request:
+1. General processes - genes only, no context
+2. Contextual state - genes + context
+3. Key regulators - genes + context
+4. Processes with enrichment - genes + context + significant terms of
+   `hc_functional_enrichment()` (run it first; `evidence = "all"` also adds
+   upstream regulators and DoRAG literature)
+
+Key parameters:
+- `modules`: `"all"` or module labels (e.g. `c("M1", "M2")`).
+- `context`: study context to guide the interpretation.
+- `system_prompt`: optional own prompt (`NULL` = neutral default prompt).
+- `provider`: `"claude"`, `"openai"`, `"gemini"`, `"local"` (vLLM server) or
+  `"manual"` (no API key: copy the prompt into a web chat, then `hc_llm_import()`).
+- `model` / `base_url` / `api_key`: model code, local endpoint, API key
+  (default: the key from the environment, e.g. `ANTHROPIC_API_KEY`).
+
+List the models each provider currently offers:
+
+```{r eval=FALSE, message=TRUE, warning=FALSE}
+hc_list_llm_models(c("gemini", "openai", "claude"))
+hc_list_llm_models("local", base_url = "http://localhost:8000/v1")
+```
+
+Option A, with an API key or a local server:
+
+```{r eval=FALSE, fig.width=13, fig.height=10, out.width="100%", message=TRUE, warning=FALSE}
+context <- "maturation of monocytes in preterm infants over the first year of life"
+
+hc <- hc_llm_enrichment(hc, modules = "all", context = context,
+                        provider = "claude", model = "claude-opus-4-6")
+
+# Local vLLM server instead:
+# hc <- hc_llm_enrichment(hc, context = context, provider = "local",
+#                         model = "Qwen/Qwen2.5-VL-32B-Instruct",
+#                         base_url = "http://localhost:8000/v1",
+#                         slot_name = "llm_enrichment_qwen")
+```
+
+Option B, without an API key (web chat): one prompt per request type (three)
+is saved as a text file (and copied to the clipboard on a local R session;
+RStudio Server in Docker has no clipboard). Paste each into a NEW chat, save
+the JSON answer and import it; repeat for every part.
+
+```{r eval=FALSE, message=TRUE, warning=FALSE}
+hc <- hc_llm_enrichment(hc, context = context, provider = "manual")
+# The prompts are in the output folder (llm_request_<id>_part1/2/3.txt).
+# For every part: paste it into a NEW chat, save the answer, import it.
+hc <- hc_llm_import(hc, file = "answer_part1.txt")  # genes only
+hc <- hc_llm_import(hc, file = "answer_part2.txt")  # genes + context
+hc <- hc_llm_import(hc, file = "answer_part3.txt")  # genes + context + enrichment
+# local R session: hc <- hc_llm_import(hc) reads the answer from the clipboard
+```
+
+Plot (long terms wrap onto at most two lines; the heatmap cells stay square):
+
+```{r eval=FALSE, fig.width=13, fig.height=10, out.width="100%", message=TRUE, warning=FALSE}
+plots <- hc_plot_llm_enrichment(hc)
+print(plots$general_processes)
+print(plots$contextual_state)
+print(plots$key_regulators)
+print(plots$grounded_processes)   # with enrichment (needs hc_functional_enrichment())
+
+# View(hc_satellite(hc, "llm_enrichment_summary"))  # incl. supporting_evidence
+```
 
 
 ## Hub gene detection

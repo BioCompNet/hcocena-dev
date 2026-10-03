@@ -1904,7 +1904,7 @@ test_that("regression: enrichment module labels and all-db headers avoid visual 
 
 
 test_that("regression: auxiliary heatmap module labels use the shared box-fit guard", {
-  llm_path <- test_path("..", "..", "R", "hc_plot_module_function_gemini.R")
+  llm_path <- test_path("..", "..", "R", "hc_plot_llm_enrichment.R")
   upstream_path <- test_path("..", "..", "R", "hc_upstream_inference.R")
   api_path <- test_path("..", "..", "R", "hc_api.R")
   if (!file.exists(llm_path) || !file.exists(upstream_path) || !file.exists(api_path)) {
@@ -1939,7 +1939,7 @@ test_that("regression: lightweight heatmap cache works without ComplexHeatmap ob
   fun_enrich <- get(".hc_functional_enrichment_driver", asNamespace("hcocena"))
   up_inf <- get(".hc_upstream_inference_driver", asNamespace("hcocena"))
   knowledge_plot <- get(".hc_plot_enrichment_upstream_network_driver", asNamespace("hcocena"))
-  llm_plot <- get("hc_plot_module_function_llm", asNamespace("hcocena"))
+  llm_plot <- get("hc_plot_llm_enrichment", asNamespace("hcocena"))
 
   cluster_calc <- list(
     heatmap_matrix = matrix(
@@ -2100,8 +2100,8 @@ test_that("regression: lightweight heatmap cache works without ComplexHeatmap ob
   expect_s3_class(grob, "grob")
 
   hc@satellite <- S4Vectors::SimpleList(list(
-    llm_module_function = list(module_1 = list(status = "ok")),
-    llm_module_function_summary = data.frame(
+    llm_enrichment = list(module_1 = list(status = "ok")),
+    llm_enrichment_summary = data.frame(
       module = c("M1", "M2"),
       module_color = c("red", "blue"),
       general_processes = c("alpha process", "beta process"),
@@ -2148,8 +2148,8 @@ test_that("regression: llm plot export writes pdf and png into configured output
   hc@config@paths <- S4Vectors::DataFrame(dir_output = out_dir)
   hc@config@global <- S4Vectors::DataFrame(save_folder = "exports")
   hc@satellite <- S4Vectors::SimpleList(list(
-    llm_module_function = list(module_1 = list(status = "ok")),
-    llm_module_function_summary = data.frame(
+    llm_enrichment = list(module_1 = list(status = "ok")),
+    llm_enrichment_summary = data.frame(
       module = "M1",
       module_color = "steelblue",
       general_processes = "Interferon signaling",
@@ -2159,7 +2159,7 @@ test_that("regression: llm plot export writes pdf and png into configured output
     )
   ))
 
-  p <- hcocena::hc_plot_module_function_llm(
+  p <- hcocena::hc_plot_llm_enrichment(
     hc,
     with_heatmap = FALSE,
     fields = "general_processes",
@@ -2186,34 +2186,6 @@ test_that("regression: llm plot export writes pdf and png into configured output
     expect_gt(mean(border_rgb), 0.85)
     expect_gt(mean(rgb_img), 0.4)
   }
-})
-
-
-test_that("regression: llm plot supports the separate RAG interpretation", {
-  hc <- methods::new("HCoCenaExperiment")
-  hc@satellite <- S4Vectors::SimpleList(list(
-    llm_module_function = list(module_1 = list(status = "ok")),
-    llm_module_function_summary = data.frame(
-      module = "M1",
-      module_color = "steelblue",
-      general_processes = "Interferon signaling",
-      contextual_state = "Context-only state",
-      key_regulators = "STAT1 / IRF7",
-      rag_contextual_state = "RAG-supported contextual state",
-      stringsAsFactors = FALSE
-    )
-  ))
-
-  plots <- hcocena::hc_plot_module_function_llm(
-    hc,
-    with_heatmap = FALSE,
-    fields = c("contextual_state", "contextual_state_rag"),
-    save = FALSE
-  )
-
-  expect_named(plots, c("contextual_state", "contextual_state_rag"))
-  expect_true("RAG-supported contextual state" %in% plots$contextual_state_rag$data$term_plot)
-  expect_true("Context-only state" %in% plots$contextual_state$data$term_plot)
 })
 
 
@@ -2274,8 +2246,8 @@ test_that("regression: llm heatmap plot body is top-aligned under the title", {
     overall_plot_scale = 1.25
   )
   hc@satellite <- S4Vectors::SimpleList(list(
-    llm_module_function = list(module_1 = list(status = "ok")),
-    llm_module_function_summary = data.frame(
+    llm_enrichment = list(module_1 = list(status = "ok")),
+    llm_enrichment_summary = data.frame(
       module = c("M1", "M2"),
       module_color = c("red", "blue"),
       general_processes = c("alpha process", "beta process"),
@@ -2285,7 +2257,7 @@ test_that("regression: llm heatmap plot body is top-aligned under the title", {
     )
   ))
 
-  p <- hcocena::hc_plot_module_function_llm(
+  p <- hcocena::hc_plot_llm_enrichment(
     hc,
     fields = "general_processes",
     save = FALSE
@@ -2586,28 +2558,12 @@ test_that("regression: vllm think blocks are stripped before JSON parsing", {
 })
 
 
-test_that("regression: vllm gets a longer default timeout", {
-  resolve_timeout <- get(".hc_llm_resolve_timeout", asNamespace("hcocena"))
-
-  expect_equal(
-    resolve_timeout(timeout_sec = 60, llm = "openai", timeout_was_missing = TRUE),
-    60
-  )
-  expect_equal(
-    resolve_timeout(timeout_sec = 60, llm = "vllm", timeout_was_missing = TRUE),
-    300
-  )
-  expect_null(
-    resolve_timeout(timeout_sec = 0, llm = "vllm", timeout_was_missing = FALSE)
-  )
-})
-
-
 test_that("regression: claude provider is accepted and resolves api key/model settings", {
   resolve_api_key <- get(".hc_llm_resolve_api_key", asNamespace("hcocena"))
-  fun <- get("hc_module_function_llm", asNamespace("hcocena"))
+  default_model <- get(".hc_llm_default_model", asNamespace("hcocena"))
 
-  expect_true("claude_model" %in% names(formals(fun)))
+  expect_true("claude" %in% eval(formals(hcocena::hc_llm_enrichment)$provider))
+  expect_identical(default_model(NULL, "claude"), "claude-sonnet-4-6")
 
   withr::local_envvar(c(ANTHROPIC_API_KEY = "test-anthropic-key"))
   expect_identical(
@@ -2616,13 +2572,16 @@ test_that("regression: claude provider is accepted and resolves api key/model se
   )
 })
 
-test_that("regression: NAMESPACE does not export removed Claude wrapper alias", {
+test_that("regression: only the hc_llm_enrichment interface is exported", {
   exports <- getNamespaceExports("hcocena")
 
-  expect_false("hc_module_function_claude" %in% exports)
-  expect_true("hc_module_function_llm" %in% exports)
+  expect_true(all(c("hc_llm_enrichment", "hc_llm_import", "hc_plot_llm_enrichment") %in% exports))
+  expect_false(any(c(
+    "hc_module_function_llm", "hc_module_function_gemini",
+    "hc_module_function_vllm", "hc_module_function_claude",
+    "hc_plot_module_function_llm", "hc_plot_module_function_gemini"
+  ) %in% exports))
 })
-
 
 test_that("regression: llm request helpers use ellmer backends", {
   gemini_src <- paste(deparse(get(".hc_llm_request_gemini", asNamespace("hcocena"))), collapse = "\n")
@@ -2642,227 +2601,6 @@ test_that("regression: llm request helpers use ellmer backends", {
   expect_true(grepl("max_tokens = 8000", vllm_src, fixed = TRUE))
   expect_true(grepl("chat_template_kwargs = list", vllm_src, fixed = TRUE))
   expect_true(grepl("enable_thinking = FALSE", vllm_src, fixed = TRUE))
-})
-
-
-test_that("regression: llm RAG mode injects retrieved passages and stores citations", {
-  fun <- get("hc_module_function_llm", asNamespace("hcocena"))
-  default_rag_url <- get(".hc_llm_default_rag_url", asNamespace("hcocena"))
-  withr::local_envvar(HCOCENA_RAG_URL = NA_character_)
-  expect_equal(
-    default_rag_url(),
-    "https://limesbcnr-007901.iaas.uni-bonn.de/api/rag/query"
-  )
-
-  expect_true(all(c(
-    "use_rag",
-    "rag_query",
-    "rag_url",
-    "rag_top_k",
-    "rag_themes",
-    "rag_min_relevance",
-    "rag_connect_timeout_sec",
-    "rag_continue_on_error"
-  ) %in% names(formals(fun))))
-  expect_false("compare_interpretation_levels" %in% names(formals(fun)))
-
-  captured_prompts <- character(0)
-  captured_payload <- NULL
-  testthat::local_mocked_bindings(
-    .hc_llm_request_rag = function(query, url, category, top_k, themes, timeout_sec, connect_timeout_sec = NULL) {
-      captured_payload <<- list(
-        query = query,
-        url = url,
-        category = category,
-        top_k = top_k,
-        themes = themes,
-        timeout_sec = timeout_sec,
-        connect_timeout_sec = connect_timeout_sec
-      )
-      list(
-        query = query,
-        answer = "",
-        context = list(
-          list(
-            chunk = "Prenatal and early postnatal life are key periods of immune development.",
-            section = "Introduction",
-            relevance = 0.84,
-            paper = list(
-              title = "Neonatal innate immunity",
-              apa_citation = "Battersby, A. J. (2016). Antimicrobial immunity in early life.",
-              doi = "10.1000/example"
-            )
-          ),
-          list(
-            chunk = "Low relevance passage that should be filtered out.",
-            section = "Results",
-            relevance = 0.2,
-            paper = list(
-              title = "Unrelated paper",
-              apa_citation = "Unrelated, A. (2010). Unrelated.",
-              doi = ""
-            )
-          )
-        ),
-        cited_papers = list(
-          list(
-            title = "Neonatal innate immunity",
-            apa_citation = "Battersby, A. J. (2016). Antimicrobial immunity in early life.",
-            doi = "10.1000/example"
-          )
-        )
-      )
-    },
-    .hc_llm_request_vllm = function(api_key,
-                                    model,
-                                    prompt,
-                                    system_instruction,
-                                    temperature,
-                                    timeout_sec,
-                                    base_url) {
-      captured_prompts <<- c(captured_prompts, prompt)
-      result_text <- if (grepl("Retrieved DoRAG literature context", prompt, fixed = TRUE)) {
-        '{"general_processes":"rag-supported neonatal innate immune development","contextual_state":"literature-supported interferon-high neonatal state","key_regulators":"STAT1 / IRF7"}'
-      } else {
-        '{"general_processes":"context-aware neonatal immune development","contextual_state":"neonatal interferon-high immune state","key_regulators":"STAT1 / IRF7"}'
-      }
-      list(result_text = result_text, raw_response_text = result_text)
-    },
-    .package = "hcocena"
-  )
-
-  out <- fun(
-    genes = c("STAT1", "IRF7", "CXCL10"),
-    context = "neonatal immune system development",
-    llm = "vllm",
-    use_rag = TRUE,
-    rag_query = "neonatal immune system development",
-    rag_url = "http://example.test/api/rag/query",
-    rag_top_k = 2,
-    rag_themes = "Innate Immunity",
-    rag_connect_timeout_sec = 45,
-    rag_min_relevance = 0.5,
-    save_to_hc = FALSE,
-    verbose = FALSE
-  )
-
-  expect_equal(captured_payload$query, "neonatal immune system development")
-  expect_equal(captured_payload$url, "http://example.test/api/rag/query")
-  expect_equal(captured_payload$category, "DoRAG")
-  expect_equal(captured_payload$top_k, 2L)
-  expect_equal(captured_payload$themes, "Innate Immunity")
-  expect_equal(captured_payload$connect_timeout_sec, 45)
-  expect_equal(length(captured_prompts), 2L)
-  expect_true(grepl("neonatal immune system development", captured_prompts[[1]], fixed = TRUE))
-  expect_false(grepl("Retrieved DoRAG literature context", captured_prompts[[1]], fixed = TRUE))
-  expect_true(grepl("Retrieved DoRAG literature context", captured_prompts[[2]], fixed = TRUE))
-  expect_true(grepl("Prenatal and early postnatal life", captured_prompts[[2]], fixed = TRUE))
-  expect_false(grepl("Low relevance passage", captured_prompts[[2]], fixed = TRUE))
-
-  expect_equal(out$rag_query, "neonatal immune system development")
-  expect_equal(length(out$rag$context), 1L)
-  expect_true(grepl("Battersby", out$rag_context_text, fixed = TRUE))
-  expect_null(out$interpretation_levels)
-  expect_equal(out$response$general_processes, "context-aware neonatal immune development")
-  expect_equal(out$rag_response$general_processes, "rag-supported neonatal innate immune development")
-
-  summary_fun <- get(".hc_llm_summary_from_results", asNamespace("hcocena"))
-  summary_tbl <- summary_fun(list(out), hc = NULL)
-  expect_true(summary_tbl$rag_used[[1]])
-  expect_equal(summary_tbl$rag_context_count[[1]], 1L)
-  expect_true(grepl("Battersby", summary_tbl$rag_citations[[1]], fixed = TRUE))
-  expect_equal(summary_tbl$general_processes[[1]], "context-aware neonatal immune development")
-  expect_equal(summary_tbl$rag_general_processes[[1]], "rag-supported neonatal innate immune development")
-  expect_false(any(grepl("without_context|with_context|with_rag", names(summary_tbl))))
-})
-
-
-test_that("regression: llm RAG continue-on-error falls back to context interpretation", {
-  fun <- get("hc_module_function_llm", asNamespace("hcocena"))
-  captured_prompts <- character(0)
-
-  testthat::local_mocked_bindings(
-    .hc_llm_request_rag = function(...) {
-      stop("DoRAG retrieval request failed: Timeout was reached", call. = FALSE)
-    },
-    .hc_llm_request_vllm = function(api_key,
-                                    model,
-                                    prompt,
-                                    system_instruction,
-                                    temperature,
-                                    timeout_sec,
-                                    base_url) {
-      captured_prompts <<- c(captured_prompts, prompt)
-      result_text <- if (grepl("The biological context is: none provided", prompt, fixed = TRUE)) {
-        '{"general_processes":"gene-only signal","contextual_state":"gene-only state","key_regulators":"STAT1"}'
-      } else {
-        '{"general_processes":"context-aware signal","contextual_state":"context-aware state","key_regulators":"STAT1 / IRF7"}'
-      }
-      list(result_text = result_text, raw_response_text = result_text)
-    },
-    .package = "hcocena"
-  )
-
-  out <- fun(
-    genes = c("STAT1", "IRF7"),
-    context = "neonatal immune system development",
-    llm = "vllm",
-    use_rag = TRUE,
-    rag_continue_on_error = TRUE,
-    save_to_hc = FALSE,
-    verbose = FALSE
-  )
-
-  expect_equal(length(captured_prompts), 1L)
-  expect_null(out$rag_response)
-  expect_true(grepl("Timeout was reached", out$rag_error_message, fixed = TRUE))
-  expect_equal(out$response$general_processes, "context-aware signal")
-  summary_fun <- get(".hc_llm_summary_from_results", asNamespace("hcocena"))
-  expect_false(summary_fun(list(out), hc = NULL)$rag_used[[1]])
-})
-
-
-test_that("regression: llm RAG usage requires passages and a RAG response", {
-  rag_used <- get(".hc_llm_result_rag_used", asNamespace("hcocena"))
-
-  expect_false(rag_used(list(
-    rag = list(status = "error", context = list()),
-    rag_response = NULL
-  )))
-  expect_false(rag_used(list(
-    rag = list(status = "ok", context = list()),
-    rag_response = list(contextual_state = "unused")
-  )))
-  expect_true(rag_used(list(
-    rag = list(status = "ok", context = list(list(chunk = "evidence"))),
-    rag_response = list(contextual_state = "supported")
-  )))
-})
-
-
-test_that("regression: llm count and timeout parameters reject lossy values", {
-  fun <- get("hc_module_function_llm", asNamespace("hcocena"))
-  common <- list(
-    genes = c("STAT1", "IRF7"),
-    llm = "vllm",
-    save_to_hc = FALSE,
-    verbose = FALSE
-  )
-
-  expect_error(do.call(fun, c(common, list(max_genes = 0.5))), "positive integer")
-  expect_error(do.call(fun, c(common, list(timeout_sec = -1))), ">= 0")
-  expect_error(
-    do.call(fun, c(common, list(use_rag = TRUE, rag_top_k = 0.5))),
-    "positive integer"
-  )
-  expect_error(
-    do.call(fun, c(common, list(use_rag = TRUE, rag_timeout_sec = -1))),
-    ">= 0"
-  )
-  expect_error(
-    do.call(fun, c(common, list(use_rag = TRUE, rag_connect_timeout_sec = -1))),
-    ">= 0"
-  )
 })
 
 
@@ -2966,12 +2704,12 @@ test_that("regression: plot heatmaps default to main order unless clustering is 
   expect_true("cluster_columns" %in% names(formals(hcocena:::.hc_plot_enrichment_upstream_network_driver)))
   expect_true("cluster_columns" %in% names(formals(hcocena::hc_upstream_inference)))
   expect_true("cluster_columns" %in% names(formals(hcocena::hc_plot_enrichment_upstream_network)))
-  expect_true("cluster_columns" %in% names(formals(hcocena::hc_plot_module_function_llm)))
+  expect_true("cluster_columns" %in% names(formals(hcocena::hc_plot_llm_enrichment)))
   expect_true("heatmap_cluster_columns" %in% names(formals(hcocena:::.hc_upstream_inference_driver)))
   expect_true("heatmap_cluster_columns" %in% names(formals(hcocena:::.hc_plot_enrichment_upstream_network_driver)))
   expect_true("heatmap_cluster_columns" %in% names(formals(hcocena::hc_upstream_inference)))
   expect_true("heatmap_cluster_columns" %in% names(formals(hcocena::hc_plot_enrichment_upstream_network)))
-  expect_true("heatmap_cluster_columns" %in% names(formals(hcocena::hc_plot_module_function_llm)))
+  expect_true("heatmap_cluster_columns" %in% names(formals(hcocena::hc_plot_llm_enrichment)))
   expect_identical(formals(hcocena:::.hc_plot_cluster_heatmap_driver)$cluster_columns, FALSE)
   expect_identical(formals(hcocena:::plot_cluster_heatmap_new)$cluster_columns, FALSE)
   expect_identical(formals(hcocena:::.hc_plot_cluster_heatmap_driver)$smart_column_gaps, FALSE)

@@ -1,9 +1,12 @@
 #' Upstream regulator and pathway inference
 #'
-#' Performs module-wise upstream activity inference using `decoupleR` with
-#' DoRothEA (TF regulons) and/or PROGENy (pathway footprints).
-#' Results are summarized per module, exported as Excel tables, and visualized
-#' as a mixed dot plot and an activity heatmap.
+#' Links modules to upstream regulators: TF regulons (CollecTRI, or DoRothEA)
+#' and pathway-responsive genes (PROGENy, optional custom GMT files).
+#' Significance is an over-representation test of the regulator's targets
+#' among the module genes against all network genes, corrected over all
+#' module x regulator tests of a resource. The signed score per condition
+#' describes how the module's targets move (sign of regulation taken into
+#' account). Results are exported as Excel tables and plotted as heatmaps.
 #'
 #' @param resources Character vector of upstream resources to use.
 #'   Allowed values are `"TF"` and `"Pathway"`. Default is both.
@@ -14,18 +17,30 @@
 #' @param padj Multiple-testing correction method passed to
 #'   [stats::p.adjust()]. Default is `"BH"`.
 #' @param qval Adjusted p-value threshold for significance. Default is 0.05.
-#' @param tf_confidence Character vector of DoRothEA confidence levels to keep.
-#'   Default is `c("A", "B", "C")`.
-#' @param minsize Minimum number of targets required per source in
-#'   `decoupleR::run_ulm()`. Default is 5.
-#' @param method Inference method name used via `decoupleR::run_<method>`.
-#'   Currently only `"ulm"` is supported. Default is `"ulm"`.
-#' @param activity_input Character scalar selecting the matrix used for
-#'   decoupleR activity inference:
+#' @param tf_resource TF regulon resource: `"auto"` (default) uses CollecTRI
+#'   when it can be loaded (needs `OmnipathR` and internet) and DoRothEA
+#'   otherwise; `"collectri"` or `"dorothea"` force one of them.
+#' @param tf_confidence Character vector of DoRothEA confidence levels to keep
+#'   (DoRothEA only). Default is `c("A", "B", "C")`.
+#' @param progeny_top Number of most responsive genes per PROGENy pathway.
+#'   Default is 100.
+#' @param minsize Minimum number of targets (within the network genes) a
+#'   regulator needs to be tested, and minimum module size. Default is 5.
+#' @param min_overlap Minimum number of a regulator's targets in a module for
+#'   the link to count as significant. Default is 3.
+#' @param collapse_redundant Logical. If `TRUE` (default), regulators whose
+#'   module targets largely repeat a better-ranked regulator of the same module
+#'   are flagged in `redundant_with` and left out of the selected (plotted)
+#'   regulators.
+#' @param redundancy_jaccard Jaccard index of the module targets from which a
+#'   regulator counts as redundant. Default is 0.5.
+#' @param method Test used to link modules and regulators. Only `"ora"`
+#'   (hypergeometric over-representation) is supported.
+#' @param activity_input Character scalar selecting the values used for the
+#'   signed score per condition:
 #'   `"gfc"` (default) uses `integrated_output$GFC_all_layers`,
-#'   `"fc"` uses user-defined pairwise fold-changes from `fc_comparisons`,
-#'   `"expression"` uses layer-wise mean expression values (anti-log transformed
-#'   when `data_in_log = TRUE`) across samples.
+#'   `"fc"` uses user-defined pairwise log2 fold-changes from
+#'   `fc_comparisons`.
 #' @param fc_comparisons Character vector of pairwise comparisons used only when
 #'   `activity_input = "fc"`. Each entry must be formatted as
 #'   `"groupA_vs_groupB"` (numerator vs denominator), e.g.
@@ -80,9 +95,14 @@
                                clusters = c("all"),
                                padj = "BH",
                                qval = 0.05,
+                               tf_resource = "auto",
                                tf_confidence = c("A", "B", "C"),
+                               progeny_top = 100,
                                minsize = 5,
-                               method = "ulm",
+                               min_overlap = 3,
+                               collapse_redundant = TRUE,
+                               redundancy_jaccard = 0.5,
+                               method = "ora",
                                activity_input = "gfc",
                                fc_comparisons = NULL,
                                custom_pathway_gmt = NULL,
@@ -139,6 +159,17 @@
     stop("`minsize` must be a positive integer.")
   }
   minsize <- base::as.integer(minsize)
+  if (!base::is.numeric(min_overlap) || base::length(min_overlap) != 1 || base::is.na(min_overlap) || min_overlap < 1) {
+    stop("`min_overlap` must be a positive integer.")
+  }
+  min_overlap <- base::as.integer(min_overlap)
+  if (!base::is.logical(collapse_redundant) || base::length(collapse_redundant) != 1 || base::is.na(collapse_redundant)) {
+    stop("`collapse_redundant` must be TRUE or FALSE.")
+  }
+  if (!base::is.numeric(redundancy_jaccard) || base::length(redundancy_jaccard) != 1 ||
+    base::is.na(redundancy_jaccard) || redundancy_jaccard <= 0 || redundancy_jaccard > 1) {
+    stop("`redundancy_jaccard` must be a number in (0, 1].")
+  }
   if (!base::is.logical(plot) || base::length(plot) != 1) {
     stop("`plot` must be TRUE or FALSE.")
   }
@@ -170,7 +201,7 @@
       message(
         ".hc_upstream_inference_driver(): per-condition comparison mode enabled ",
         "(`consistent_terms = TRUE`). ",
-        "Term axis is fixed across conditions; `*` marks significance in the shown condition."
+        "Term axis is fixed across conditions; `*` marks regulators linked to the module and active in the shown condition."
       )
     } else {
       message(
@@ -207,13 +238,35 @@
     stop("`cluster_columns` must be TRUE or FALSE.")
   }
   method <- base::tolower(base::as.character(method[[1]]))
-  if (!method %in% "ulm") {
-    stop("Only `method = 'ulm'` is currently supported.")
+  if (identical(method, "ulm")) {
+    stop(
+      "`method = 'ulm'` was removed: ULM restricted to the genes of one ",
+      "co-expressed module compares targets with genes that move the same way. ",
+      "Modules are now linked to regulators by over-representation ",
+      "(`method = 'ora'`)."
+    )
   }
-  activity_input <- base::match.arg(
-    base::tolower(base::as.character(activity_input[[1]])),
-    choices = c("gfc", "fc", "expression")
+  if (!method %in% "ora") {
+    stop("Only `method = 'ora'` is supported.")
+  }
+  tf_resource <- base::match.arg(
+    base::tolower(base::as.character(tf_resource[[1]])),
+    choices = c("auto", "collectri", "dorothea")
   )
+  if (!base::is.numeric(progeny_top) || base::length(progeny_top) != 1 ||
+    base::is.na(progeny_top) || progeny_top < 1) {
+    stop("`progeny_top` must be a positive integer.")
+  }
+  progeny_top <- base::as.integer(progeny_top)
+  activity_input <- base::tolower(base::as.character(activity_input[[1]]))
+  if (identical(activity_input, "expression")) {
+    stop(
+      "`activity_input = 'expression'` was removed: absolute expression ",
+      "levels describe how abundant the targets are, not how they change. ",
+      "Use `'gfc'` or `'fc'`."
+    )
+  }
+  activity_input <- base::match.arg(activity_input, choices = c("gfc", "fc"))
   heatmap_side <- base::match.arg(base::tolower(base::as.character(heatmap_side)), choices = c("left", "right"))
 
   normalize_scale_limits <- function(x) {
@@ -548,54 +601,12 @@
     }
     base::as.character(info_dataset[[1]])
   }
-  .hc_ui_prepare_activity_matrix_from_expression <- function() {
-    net_genes <- .hc_ui_get_integrated_net_genes()
-
-    set_indices <- base::seq_len(base::length(hcobject[["layer_specific_outputs"]]))
-    set_mats <- list()
-    for (z in set_indices) {
-      set_name <- base::paste0("set", z)
-      set_mean_mat <- .hc_ui_prepare_group_mean_matrix(set_name = set_name)
-      if (base::is.null(set_mean_mat)) {
-        next
-      }
-      set_full <- base::matrix(
-        NA_real_,
-        nrow = base::length(net_genes),
-        ncol = base::ncol(set_mean_mat),
-        dimnames = list(net_genes, base::colnames(set_mean_mat))
-      )
-      overlap <- base::intersect(net_genes, base::rownames(set_mean_mat))
-      if (base::length(overlap) > 0) {
-        set_full[overlap, ] <- set_mean_mat[overlap, , drop = FALSE]
-      }
-      set_mats[[base::length(set_mats) + 1]] <- set_full
-    }
-
-    if (base::length(set_mats) == 0) {
-      stop("Could not build expression-based activity matrix from current layer data.")
-    }
-
-    mat <- base::do.call(base::cbind, set_mats)
-    keep_rows <- base::rowSums(!base::is.na(mat)) > 0
-    mat <- mat[keep_rows, , drop = FALSE]
-    if (base::nrow(mat) == 0) {
-      stop("No non-missing rows available in expression activity matrix.")
-    }
-    mat <- .hc_ui_collapse_duplicate_rows(mat)
-    mat <- .hc_ui_collapse_duplicate_columns(mat)
-    mat
-  }
   .hc_ui_prepare_activity_matrix_from_fc <- function(fc_comparisons) {
     net_genes <- .hc_ui_get_integrated_net_genes()
     comparison_df <- .hc_ui_parse_fc_comparisons(fc_comparisons)
     comparison_labels <- base::as.character(comparison_df$comparison)
     comparison_found <- stats::setNames(base::rep(FALSE, base::length(comparison_labels)), comparison_labels)
     available_groups <- base::character(0)
-    fc_limit <- .hc_first_numeric_value(hcobject[["global_settings"]][["range_GFC"]])
-    if (!base::is.finite(fc_limit) || base::is.na(fc_limit) || fc_limit <= 0) {
-      fc_limit <- 2
-    }
     pseudo_count <- 1e-08
     set_indices <- base::seq_len(base::length(hcobject[["layer_specific_outputs"]]))
     set_mats <- list()
@@ -622,8 +633,6 @@
         den_vals <- .hc_as_numeric_safely(set_mean_mat[overlap, den_grp])
         fc_vals <- .hc_log2_safely((num_vals + pseudo_count) / (den_vals + pseudo_count))
         fc_vals[!base::is.finite(fc_vals)] <- NA_real_
-        fc_vals[fc_vals > fc_limit] <- fc_limit
-        fc_vals[fc_vals < (-fc_limit)] <- -fc_limit
         set_full <- base::matrix(
           NA_real_,
           nrow = base::length(net_genes),
@@ -698,11 +707,7 @@
   module_heatmap_col_order <- NULL
   module_heatmap_name <- "GFC"
   activity_module_heatmap_mat <- NULL
-  if (identical(activity_input, "expression")) {
-    activity_mat <- .hc_ui_prepare_activity_matrix_from_expression()
-    activity_label <- "expression"
-    module_heatmap_name <- "Expression"
-  } else if (identical(activity_input, "fc")) {
+  if (identical(activity_input, "fc")) {
     fc_summary <- .hc_ui_prepare_activity_matrix_from_fc(fc_comparisons = fc_comparisons)
     activity_mat <- fc_summary$mat
     activity_label <- "FC"
@@ -745,6 +750,7 @@
   }
 
   tf_network <- NULL
+  tf_database_label <- "CollecTRI"
   pathway_network <- NULL
   pathway_database_label <- "PROGENy"
   custom_pathway_network <- .hc_load_custom_gmt_pathway_network(
@@ -757,23 +763,46 @@
     custom_pathway_databases <- base::character(0)
   }
 
+  # Test universe: the genes that could have landed in a module at all, i.e.
+  # the integrated network genes with a value in the activity matrix.
+  universe_genes <- base::rownames(activity_mat)
+  net_genes_universe <- tryCatch(.hc_ui_get_integrated_net_genes(), error = function(e) NULL)
+  if (!base::is.null(net_genes_universe)) {
+    universe_genes <- base::intersect(universe_genes, net_genes_universe)
+  }
+  if (base::length(universe_genes) == 0) {
+    stop("No genes left for the test universe (network genes with ", activity_label, " values).")
+  }
+  module_genes <- stats::setNames(base::lapply(cluster_order, function(cl) {
+    genes <- dplyr::filter(cluster_info, color == cl) %>%
+      dplyr::pull(., "gene_n") %>%
+      base::strsplit(split = ",") %>%
+      base::unlist()
+    base::intersect(base::unique(base::as.character(genes)), universe_genes)
+  }), cluster_order)
+
   if ("TF" %in% resources) {
-    tf_network <- .hc_ui_load_tf_network(organism = organism, tf_confidence = tf_confidence)
-    tf_network <- tf_network[tf_network$target %in% base::rownames(activity_mat), , drop = FALSE]
+    tf_network <- .hc_ui_load_tf_network(
+      organism = organism,
+      tf_resource = tf_resource,
+      tf_confidence = tf_confidence
+    )
+    tf_database_label <- base::attr(tf_network, "database")
+    tf_network <- tf_network[tf_network$target %in% universe_genes, , drop = FALSE]
     if (base::nrow(tf_network) == 0) {
-      warning("TF network contains no targets overlapping with ", activity_label, " genes.")
+      warning("TF network contains no targets overlapping with the network genes.")
     }
   }
   if ("PATHWAY" %in% resources) {
     progeny_network <- tryCatch(
-      .hc_ui_load_pathway_network(organism = organism),
+      .hc_ui_load_pathway_network(organism = organism, top = progeny_top),
       error = function(e) {
         warning("Could not load PROGENy pathway model: ", conditionMessage(e))
         NULL
       }
     )
     if (!base::is.null(progeny_network) && base::nrow(progeny_network) > 0) {
-      progeny_network <- progeny_network[progeny_network$target %in% base::rownames(activity_mat), , drop = FALSE]
+      progeny_network <- progeny_network[progeny_network$target %in% universe_genes, , drop = FALSE]
       if (base::nrow(progeny_network) == 0) {
         progeny_network <- NULL
       }
@@ -781,7 +810,7 @@
 
     if (!base::is.null(custom_pathway_network) && base::nrow(custom_pathway_network) > 0) {
       custom_pathway_network <- custom_pathway_network[
-        custom_pathway_network$target %in% base::rownames(activity_mat), ,
+        custom_pathway_network$target %in% universe_genes, ,
         drop = FALSE
       ]
       if (base::nrow(custom_pathway_network) == 0) {
@@ -811,7 +840,7 @@
     }
 
     if (base::nrow(pathway_network) == 0) {
-      warning("Pathway network contains no targets overlapping with ", activity_label, " genes.")
+      warning("Pathway network contains no targets overlapping with the network genes.")
     } else {
       has_progeny <- !base::is.null(progeny_network) && base::nrow(progeny_network) > 0
       has_custom <- !base::is.null(custom_pathway_network) && base::nrow(custom_pathway_network) > 0
@@ -837,199 +866,191 @@
     "pvalue",
     "qvalue",
     "direction",
+    "regulation",
     "n_conditions",
     "n_genes",
-    "n_targets"
+    "n_targets",
+    "n_overlap",
+    "fold_enrichment",
+    "peak_condition",
+    "consistency",
+    "n_active_conditions",
+    "regulator_module",
+    "regulator_in_module",
+    "regulator_cor",
+    "redundant_with",
+    "overlap_genes"
   )
-  summary_cols_condition <- c(
-    "resource",
-    "database",
-    "cluster",
-    "module_label",
-    "condition",
-    "rank",
-    "term",
-    "score",
-    "abs_score",
-    "pvalue",
-    "qvalue",
-    "direction",
-    "n_conditions",
-    "n_genes",
-    "n_targets"
+  summary_cols_condition <- base::append(
+    base::append(summary_cols, "condition", after = 4),
+    c("activity", "activity_pvalue", "activity_qvalue"),
+    after = 9
   )
-  empty_summary <- function() {
-    base::data.frame(
-      resource = base::character(0),
-      database = base::character(0),
-      cluster = base::character(0),
-      module_label = base::character(0),
-      rank = base::integer(0),
-      term = base::character(0),
-      score = base::numeric(0),
-      abs_score = base::numeric(0),
-      pvalue = base::numeric(0),
-      qvalue = base::numeric(0),
-      direction = base::character(0),
-      n_conditions = base::integer(0),
-      n_genes = base::integer(0),
-      n_targets = base::integer(0),
-      stringsAsFactors = FALSE
-    )
+  empty_summary <- function(with_condition = FALSE) {
+    cols <- if (with_condition) summary_cols_condition else summary_cols
+    num_cols <- c("rank", "score", "abs_score", "pvalue", "qvalue", "n_conditions",
+                  "n_genes", "n_targets", "n_overlap", "fold_enrichment", "consistency",
+                  "n_active_conditions", "regulator_cor", "activity", "activity_pvalue",
+                  "activity_qvalue")
+    out <- base::lapply(cols, function(nm) {
+      if (nm %in% num_cols) {
+        base::numeric(0)
+      } else if (nm == "regulator_in_module") {
+        base::logical(0)
+      } else {
+        base::character(0)
+      }
+    })
+    base::names(out) <- cols
+    base::as.data.frame(out, stringsAsFactors = FALSE)
   }
-  empty_summary_condition <- function() {
-    base::data.frame(
-      resource = base::character(0),
-      database = base::character(0),
-      cluster = base::character(0),
-      module_label = base::character(0),
-      condition = base::character(0),
-      rank = base::integer(0),
-      term = base::character(0),
-      score = base::numeric(0),
-      abs_score = base::numeric(0),
-      pvalue = base::numeric(0),
-      qvalue = base::numeric(0),
-      direction = base::character(0),
-      n_conditions = base::integer(0),
-      n_genes = base::integer(0),
-      n_targets = base::integer(0),
-      stringsAsFactors = FALSE
+  empty_summary_condition <- function() empty_summary(with_condition = TRUE)
+
+  # Module of every network gene (by label), used to check whether a TF is
+  # itself co-expressed with its targets.
+  gene_module_label <- base::unlist(base::lapply(cluster_order, function(cl) {
+    stats::setNames(
+      base::rep(module_label_map_current[[cl]], base::length(module_genes[[cl]])),
+      module_genes[[cl]]
     )
-  }
+  }))
 
   run_one_resource <- function(resource_name, database_name, network_df) {
-    all_rows_by_condition <- list()
-    selected_rows <- list()
-    significant_rows <- list()
-    selected_rows_by_condition <- list()
-    significant_rows_by_condition <- list()
-    raw_by_cluster <- list()
-
+    empty_out <- list(
+      selected = empty_summary(),
+      significant = empty_summary(),
+      all_by_condition = empty_summary_condition(),
+      selected_by_condition = empty_summary_condition(),
+      significant_by_condition = empty_summary_condition(),
+      raw = base::data.frame(),
+      activity = base::data.frame()
+    )
     if (base::is.null(network_df) || base::nrow(network_df) == 0) {
-      return(list(
-        selected = empty_summary(),
-        significant = empty_summary(),
-        all_by_condition = empty_summary_condition(),
-        selected_by_condition = empty_summary_condition(),
-        significant_by_condition = empty_summary_condition(),
-        raw = raw_by_cluster
-      ))
+      return(empty_out)
+    }
+    ora <- .hc_ui_module_ora(
+      module_genes = module_genes,
+      network = network_df,
+      universe = universe_genes,
+      minsize = minsize,
+      padj = padj
+    )
+    if (base::nrow(ora) == 0) {
+      return(empty_out)
+    }
+    target_stats <- .hc_ui_module_target_scores(ora = ora, network = network_df, values = activity_mat)
+    score_mat <- target_stats$score
+    consistency_mat <- target_stats$consistency
+    peak_idx <- base::apply(base::abs(score_mat), 1, function(v) {
+      if (base::all(base::is.na(v))) NA_integer_ else base::which.max(v)
+    })
+    peak_cells <- base::cbind(base::seq_len(base::nrow(ora)), peak_idx)
+    ora$score <- score_mat[peak_cells]
+    ora$abs_score <- base::abs(ora$score)
+    ora$peak_condition <- base::colnames(score_mat)[peak_idx]
+    ora$consistency <- consistency_mat[peak_cells]
+    ora$regulation <- .hc_ui_module_regulation(ora = ora, network = network_df)
+    ora$n_conditions <- base::rowSums(!base::is.na(score_mat))
+    ora$direction <- base::ifelse(ora$score >= 0, "activated", "inhibited")
+    ora$resource <- resource_name
+    ora$database <- database_name
+    ora$module_label <- base::unname(module_label_map_current[ora$cluster])
+
+    # Is the regulator itself a module gene, and does its profile follow the
+    # module? Only meaningful for TFs (pathways are not genes).
+    if (identical(resource_name, "TF")) {
+      ora$regulator_module <- base::unname(gene_module_label[ora$term])
+      ora$regulator_module[base::is.na(ora$regulator_module)] <- ""
+      ora$regulator_in_module <- ora$regulator_module == ora$module_label
+      ora$regulator_cor <- base::vapply(base::seq_len(base::nrow(ora)), function(i) {
+        .hc_ui_regulator_cor(
+          regulator = ora$term[i],
+          cluster = ora$cluster[i],
+          values = activity_mat,
+          module_means = activity_module_heatmap_mat
+        )
+      }, base::numeric(1))
+    } else {
+      ora$regulator_module <- NA_character_
+      ora$regulator_in_module <- NA
+      ora$regulator_cor <- NA_real_
     }
 
-    for (cl in cluster_order) {
-      genes <- dplyr::filter(cluster_info, color == cl) %>%
-        dplyr::pull(., "gene_n") %>%
-        base::strsplit(split = ",") %>%
-        base::unlist()
-      genes <- base::intersect(base::unique(base::as.character(genes)), base::rownames(activity_mat))
-      if (base::length(genes) < minsize) {
-        next
-      }
+    # Regulator activity per condition over all universe genes (decoupleR ULM,
+    # the use it is designed for): when is the regulator active?
+    activity <- .hc_ui_condition_activity(
+      values = activity_mat[base::rownames(activity_mat) %in% universe_genes, , drop = FALSE],
+      network = network_df,
+      minsize = minsize,
+      padj = padj
+    )
+    activity_key <- base::paste(activity$source, activity$condition, sep = "\t")
+    active_mat <- base::vapply(condition_levels, function(cond_nm) {
+      idx <- base::match(base::paste(ora$term, cond_nm, sep = "\t"), activity_key)
+      act <- activity$activity[idx]
+      q <- activity$activity_qvalue[idx]
+      sc <- score_mat[, cond_nm]
+      !base::is.na(q) & q <= qval & !base::is.na(sc) & base::sign(act) == base::sign(sc)
+    }, base::logical(base::nrow(ora)))
+    active_mat <- base::matrix(active_mat, nrow = base::nrow(ora), dimnames = list(NULL, condition_levels))
 
-      mat_mod <- activity_mat[genes, , drop = FALSE]
-      keep_cols <- base::colSums(!base::is.na(mat_mod)) > 0
-      mat_mod <- mat_mod[, keep_cols, drop = FALSE]
-      if (base::ncol(mat_mod) == 0) {
-        next
-      }
-      net_mod <- network_df[network_df$target %in% genes, , drop = FALSE]
-      if (base::nrow(net_mod) == 0) {
-        next
-      }
+    row_order <- base::order(
+      base::factor(ora$cluster, levels = cluster_order),
+      ora$qvalue,
+      -ora$fold_enrichment,
+      ora$term
+    )
+    ora <- ora[row_order, , drop = FALSE]
+    score_mat <- score_mat[row_order, , drop = FALSE]
+    active_mat <- active_mat[row_order, , drop = FALSE]
+    ora$rank <- stats::ave(base::seq_len(base::nrow(ora)), ora$cluster, FUN = base::seq_along)
+    base::rownames(ora) <- NULL
 
-      raw_res <- .hc_ui_run_decouple(
-        mat = mat_mod,
-        network = net_mod,
-        method = method,
-        minsize = minsize
-      )
-      if (base::is.null(raw_res) || base::nrow(raw_res) == 0) {
-        next
-      }
-      raw_by_cluster[[cl]] <- raw_res
+    is_sig <- !base::is.na(ora$qvalue) & ora$qvalue <= qval & ora$n_overlap >= min_overlap
+    active_mat[!is_sig, ] <- FALSE
+    ora$n_active_conditions <- base::rowSums(active_mat)
+    ora$redundant_with <- .hc_ui_flag_redundant(ora, keep = is_sig, jaccard = redundancy_jaccard)
 
-      agg <- .hc_ui_summarize_decouple_result(raw_res, padj = padj)
-      if (base::nrow(agg) == 0) {
-        next
-      }
-      agg$resource <- resource_name
-      agg$database <- database_name
-      agg$cluster <- cl
-      agg$module_label <- module_label_map_current[[cl]]
-      agg$n_genes <- base::length(genes)
-      target_count <- base::table(net_mod$source)
-      agg$n_targets <- base::as.integer(target_count[agg$term])
-      agg$n_targets[base::is.na(agg$n_targets)] <- 0L
-      agg$condition <- "all"
-      agg <- agg[base::order(agg$qvalue, -agg$abs_score, agg$term), , drop = FALSE]
-      agg$rank <- base::seq_len(base::nrow(agg))
-      agg <- agg[, summary_cols, drop = FALSE]
-
-      sig <- agg[!base::is.na(agg$qvalue) & agg$qvalue <= qval, , drop = FALSE]
-      if (base::nrow(sig) > 0) {
-        sig <- sig[base::order(sig$qvalue, -sig$abs_score, sig$term), , drop = FALSE]
-        sig$rank <- base::seq_len(base::nrow(sig))
-        significant_rows[[cl]] <- sig
-        selected_rows[[cl]] <- sig[base::seq_len(base::min(top, base::nrow(sig))), , drop = FALSE]
-      }
-
-      agg_by_condition <- .hc_ui_summarize_decouple_by_condition(raw_res, padj = padj)
-      if (base::nrow(agg_by_condition) > 0) {
-        agg_by_condition$resource <- resource_name
-        agg_by_condition$database <- database_name
-        agg_by_condition$cluster <- cl
-        agg_by_condition$module_label <- module_label_map_current[[cl]]
-        agg_by_condition$n_genes <- base::length(genes)
-        agg_by_condition$n_targets <- base::as.integer(target_count[agg_by_condition$term])
-        agg_by_condition$n_targets[base::is.na(agg_by_condition$n_targets)] <- 0L
-        agg_by_condition <- agg_by_condition[
-          base::order(
-            base::factor(agg_by_condition$condition, levels = condition_levels),
-            agg_by_condition$qvalue,
-            -agg_by_condition$abs_score,
-            agg_by_condition$term
-          ), ,
-          drop = FALSE
-        ]
-
-        cond_split <- base::split(base::seq_len(base::nrow(agg_by_condition)), agg_by_condition$condition)
-        for (cond_nm in base::names(cond_split)) {
-          idx <- cond_split[[cond_nm]]
-          sub <- agg_by_condition[idx, , drop = FALSE]
-          sub <- sub[base::order(sub$qvalue, -sub$abs_score, sub$term), , drop = FALSE]
-          sub$rank <- base::seq_len(base::nrow(sub))
-          sub <- sub[, summary_cols_condition, drop = FALSE]
-          key <- base::paste(cl, cond_nm, sep = "\t")
-          all_rows_by_condition[[key]] <- sub
-          selected_rows_by_condition[[key]] <- sub[base::seq_len(base::min(top, base::nrow(sub))), , drop = FALSE]
-          sig_sub <- sub[!base::is.na(sub$qvalue) & sub$qvalue <= qval, , drop = FALSE]
-          if (base::nrow(sig_sub) > 0) {
-            sig_sub <- sig_sub[base::order(sig_sub$qvalue, -sig_sub$abs_score, sig_sub$term), , drop = FALSE]
-            sig_sub$rank <- base::seq_len(base::nrow(sig_sub))
-            significant_rows_by_condition[[key]] <- sig_sub
-          }
-        }
-      }
+    significant <- ora[is_sig, summary_cols, drop = FALSE]
+    if (base::nrow(significant) > 0) {
+      significant$rank <- stats::ave(base::seq_len(base::nrow(significant)), significant$cluster, FUN = base::seq_along)
     }
-
-    bind_rows <- function(x) {
-      if (base::length(x) == 0) {
-        return(empty_summary())
-      }
-      out <- base::do.call(base::rbind, x)
-      out <- out[base::order(
-        base::factor(out$cluster, levels = cluster_order),
-        out$rank
-      ), , drop = FALSE]
-      base::rownames(out) <- NULL
-      out
+    selectable <- if (isTRUE(collapse_redundant)) {
+      significant[significant$redundant_with == "", , drop = FALSE]
+    } else {
+      significant
     }
-    bind_rows_by_condition <- function(x) {
-      if (base::length(x) == 0) {
+    if (base::nrow(selectable) > 0) {
+      selectable$rank <- stats::ave(base::seq_len(base::nrow(selectable)), selectable$cluster, FUN = base::seq_along)
+    }
+    selected <- selectable[selectable$rank <= top, , drop = FALSE]
+
+    # One row per condition: same module link (p/q), condition-specific
+    # target score and genome-wide regulator activity.
+    ora_key <- base::paste(ora$cluster, ora$term, sep = "\t")
+    expand_by_condition <- function(df, active_only = FALSE) {
+      if (base::nrow(df) == 0) {
         return(empty_summary_condition())
       }
-      out <- base::do.call(base::rbind, x)
+      rows <- base::match(base::paste(df$cluster, df$term, sep = "\t"), ora_key)
+      out <- base::lapply(condition_levels, function(cond_nm) {
+        x <- df
+        x$condition <- cond_nm
+        x$score <- score_mat[rows, cond_nm]
+        x$abs_score <- base::abs(x$score)
+        x$direction <- base::ifelse(x$score >= 0, "activated", "inhibited")
+        x$n_conditions <- 1L
+        idx <- base::match(base::paste(x$term, cond_nm, sep = "\t"), activity_key)
+        x$activity <- activity$activity[idx]
+        x$activity_pvalue <- activity$activity_pvalue[idx]
+        x$activity_qvalue <- activity$activity_qvalue[idx]
+        keep <- !base::is.na(x$score)
+        if (isTRUE(active_only)) {
+          keep <- keep & active_mat[rows, cond_nm]
+        }
+        x[keep, summary_cols_condition, drop = FALSE]
+      })
+      out <- base::do.call(base::rbind, out)
       out <- out[base::order(
         base::factor(out$cluster, levels = cluster_order),
         base::factor(out$condition, levels = condition_levels),
@@ -1039,19 +1060,24 @@
       out
     }
 
+    raw <- base::cbind(ora[, summary_cols, drop = FALSE], score_mat)
+    base::colnames(raw)[base::seq_len(base::ncol(score_mat)) + base::length(summary_cols)] <-
+      base::paste0("score_", base::colnames(score_mat))
+
     list(
-      selected = bind_rows(selected_rows),
-      significant = bind_rows(significant_rows),
-      all_by_condition = bind_rows_by_condition(all_rows_by_condition),
-      selected_by_condition = bind_rows_by_condition(selected_rows_by_condition),
-      significant_by_condition = bind_rows_by_condition(significant_rows_by_condition),
-      raw = raw_by_cluster
+      selected = selected,
+      significant = significant,
+      all_by_condition = expand_by_condition(ora[, summary_cols, drop = FALSE]),
+      selected_by_condition = expand_by_condition(selected),
+      significant_by_condition = expand_by_condition(significant, active_only = TRUE),
+      raw = raw,
+      activity = activity
     )
   }
 
   tf_out <- run_one_resource(
     resource_name = "TF",
-    database_name = "DoRothEA",
+    database_name = tf_database_label,
     network_df = tf_network
   )
   pathway_out <- run_one_resource(
@@ -1155,44 +1181,8 @@
   }
   activity_score_limit <- base::max(1, base::min(4, activity_score_limit))
 
-  flatten_raw_decouple <- function(raw_list, resource_label, database_label) {
-    if (base::length(raw_list) == 0) {
-      return(base::data.frame())
-    }
-    out <- base::lapply(base::names(raw_list), function(cl) {
-      df <- raw_list[[cl]]
-      if (base::is.null(df) || base::nrow(df) == 0) {
-        return(NULL)
-      }
-      df <- df %>% base::as.data.frame(stringsAsFactors = FALSE)
-      df$cluster <- cl
-      df$module_label <- module_label_map_current[[cl]]
-      df$resource <- resource_label
-      df$database <- database_label
-      df
-    })
-    out <- out[!base::vapply(out, base::is.null, FUN.VALUE = base::logical(1))]
-    if (base::length(out) == 0) {
-      return(base::data.frame())
-    }
-    out <- base::do.call(base::rbind, out)
-    base::rownames(out) <- NULL
-    out
-  }
-  raw_decouple_tf <- flatten_raw_decouple(tf_out$raw, resource_label = "TF", database_label = "DoRothEA")
-  raw_decouple_pathway <- flatten_raw_decouple(pathway_out$raw, resource_label = "Pathway", database_label = pathway_database_label)
-  raw_parts <- list(raw_decouple_tf, raw_decouple_pathway)
-  raw_parts <- raw_parts[base::vapply(raw_parts, function(x) !base::is.null(x) && base::nrow(x) > 0, FUN.VALUE = base::logical(1))]
-  raw_decouple_all <- if (base::length(raw_parts) > 0) {
-    out <- base::do.call(base::rbind, raw_parts)
-    if ("cluster" %in% base::colnames(out) && "resource" %in% base::colnames(out)) {
-      out <- out[base::order(base::factor(base::as.character(out$cluster), levels = cluster_order), base::as.character(out$resource)), , drop = FALSE]
-    }
-    base::rownames(out) <- NULL
-    out
-  } else {
-    base::data.frame()
-  }
+  ora_tf <- tf_out$raw
+  ora_pathway <- pathway_out$raw
 
   file_prefix <- base::paste0(
     hcobject[["working_directory"]][["dir_output"]],
@@ -1246,9 +1236,10 @@
     significant_tf = tf_out$significant,
     selected_pathway = pathway_out$selected,
     significant_pathway = pathway_out$significant,
-    raw_decouple_tf = raw_decouple_tf,
-    raw_decouple_pathway = raw_decouple_pathway,
-    raw_decouple_all = raw_decouple_all
+    ora_tf = ora_tf,
+    ora_pathway = ora_pathway,
+    activity_tf = tf_out$activity,
+    activity_pathway = pathway_out$activity
   )
   base::names(export_tables) <- .hc_ui_excel_safe_sheet_names(base::names(export_tables))
   .hc_write_xlsx_atomic(
@@ -1513,6 +1504,8 @@
     significant_pathway = pathway_out$significant,
     raw_tf = tf_out$raw,
     raw_pathway = pathway_out$raw,
+    activity_tf = tf_out$activity,
+    activity_pathway = pathway_out$activity,
     module_heatmap_matrix = module_heatmap_mat,
     activity_module_heatmap_matrix = activity_module_heatmap_mat,
     module_heatmap_col_order = module_heatmap_col_order,
@@ -1535,7 +1528,16 @@
       consistent_terms = consistent_terms,
       resources = resources,
       method = method,
+      tf_resource = tf_resource,
+      tf_database = if ("TF" %in% resources) tf_database_label else NULL,
+      tf_confidence = if (identical(tf_database_label, "DoRothEA")) tf_confidence else NULL,
+      progeny_top = progeny_top,
+      universe_size = base::length(universe_genes),
+      resource_date = base::as.character(base::Sys.Date()),
       minsize = minsize,
+      min_overlap = min_overlap,
+      collapse_redundant = collapse_redundant,
+      redundancy_jaccard = redundancy_jaccard,
       activity_score_limit = activity_score_limit,
       gfc_scale_limits = gfc_scale_limits,
       qval = qval,
@@ -1549,32 +1551,50 @@
 
 
 
-.hc_ui_load_tf_network <- function(organism, tf_confidence) {
-  net <- NULL
-  get_dorothea_fn <- get0("get_dorothea", envir = asNamespace("decoupleR"), mode = "function")
-  if (!base::is.null(get_dorothea_fn)) {
-    fn_args <- base::names(base::formals(get_dorothea_fn))
-    call_args <- list()
-    if ("organism" %in% fn_args) {
-      call_args$organism <- if (identical(organism, "mouse")) "mouse" else "human"
+# TF regulons. CollecTRI (recommended by the decoupleR authors) comes from
+# OmniPath: through decoupleR/OmnipathR when installed, otherwise (or when
+# that fails) directly from the OmniPath web service. DoRothEA comes offline
+# from the `dorothea` package. The returned network carries the database
+# that was actually used in attr(, "database").
+.hc_ui_load_tf_network <- function(organism, tf_resource = "auto", tf_confidence = c("A", "B", "C")) {
+  org <- if (identical(organism, "mouse")) "mouse" else "human"
+  if (tf_resource %in% c("auto", "collectri")) {
+    problem <- "OmniPath could not be reached"
+    net <- NULL
+    if (requireNamespace("OmnipathR", quietly = TRUE)) {
+      net <- tryCatch(
+        decoupleR::get_collectri(organism = org, split_complexes = FALSE),
+        error = function(e) e
+      )
     }
-    if ("levels" %in% fn_args) {
-      call_args$levels <- tf_confidence
+    if (base::is.null(net) || inherits(net, "error") || base::nrow(net) == 0) {
+      net <- tryCatch(.hc_ui_fetch_collectri(org), error = function(e) e)
     }
-    if ("confidence" %in% fn_args) {
-      call_args$confidence <- tf_confidence
+    if (inherits(net, "error")) {
+      problem <- conditionMessage(net)
+      net <- NULL
     }
-    net <- tryCatch(base::do.call(get_dorothea_fn, call_args), error = function(e) NULL)
+    if (!base::is.null(net) && base::nrow(net) > 0) {
+      out <- .hc_ui_prepare_network(
+        net = net,
+        source_candidates = c("source", "tf"),
+        target_candidates = c("target"),
+        mor_candidates = c("mor", "weight")
+      )
+      base::attr(out, "database") <- "CollecTRI"
+      return(out)
+    }
+    if (identical(tf_resource, "collectri")) {
+      stop("Could not load CollecTRI (", problem, "). Check the internet connection, ",
+           "or use `tf_resource = \"dorothea\"`.", call. = FALSE)
+    }
+    message("CollecTRI not available (", problem, "); using DoRothEA (confidence ",
+            base::paste(tf_confidence, collapse = ", "), ") instead.")
   }
-  if (base::is.null(net) && requireNamespace("dorothea", quietly = TRUE)) {
-    obj_name <- if (identical(organism, "mouse")) "dorothea_mm" else "dorothea_hs"
-    net <- .hc_ui_get_data_object("dorothea", obj_name)
-  }
+  net <- .hc_ui_get_data_object("dorothea", if (identical(org, "mouse")) "dorothea_mm" else "dorothea_hs")
   if (base::is.null(net)) {
-    stop(
-      "Could not load DoRothEA regulons. Install `dorothea` ",
-      "or use a decoupleR version exposing `get_dorothea()`."
-    )
+    stop("Could not load DoRothEA regulons. Install the `dorothea` package ",
+         "(or `OmnipathR` for CollecTRI).", call. = FALSE)
   }
   net <- net %>% base::as.data.frame(stringsAsFactors = FALSE)
   if ("confidence" %in% base::colnames(net) && base::length(tf_confidence) > 0) {
@@ -1582,48 +1602,265 @@
   }
   out <- .hc_ui_prepare_network(
     net = net,
-    source_candidates = c("source", "tf", "TF", "regulator", "transcription_factor"),
-    target_candidates = c("target", "gene", "Gene", "target_gene", "symbol"),
-    mor_candidates = c("mor", "weight", "Weight", "likelihood")
+    source_candidates = c("source", "tf"),
+    target_candidates = c("target"),
+    mor_candidates = c("mor", "weight")
   )
   if (base::nrow(out) == 0) {
-    stop("DoRothEA network is empty after preprocessing/filtering.")
+    stop("DoRothEA network is empty after filtering for confidence ",
+         base::paste(tf_confidence, collapse = ", "), ".", call. = FALSE)
+  }
+  base::attr(out, "database") <- "DoRothEA"
+  out
+}
+
+# CollecTRI straight from the OmniPath web service, prepared like
+# decoupleR::get_collectri(split_complexes = FALSE): AP-1 and NF-kB complexes
+# become the sources "AP1" and "NFKB"; inhibitory interactions get mor = -1.
+.hc_ui_fetch_collectri <- function(organism = "human") {
+  taxon <- if (identical(organism, "mouse")) 10090 else 9606
+  url <- base::paste0(
+    "https://omnipathdb.org/interactions?datasets=collectri&genesymbols=yes",
+    "&loops=yes&organisms=", taxon, "&format=tsv"
+  )
+  old <- base::options(timeout = base::max(120, base::getOption("timeout")))
+  on.exit(base::options(old), add = TRUE)
+  raw <- utils::read.delim(url, stringsAsFactors = FALSE, quote = "")
+  if (base::nrow(raw) == 0 || !"source_genesymbol" %in% base::names(raw)) {
+    stop("OmniPath returned no CollecTRI interactions.")
+  }
+  is_true <- function(x) base::toupper(base::as.character(x)) %in% c("TRUE", "1")
+  src <- raw$source_genesymbol
+  is_complex <- base::startsWith(base::as.character(raw$source), "COMPLEX:")
+  src[is_complex & base::grepl("JUN|FOS", src)] <- "AP1"
+  src[is_complex & base::grepl("REL|NFKB", src)] <- "NFKB"
+  mor <- base::ifelse(is_true(raw$is_inhibition) & !is_true(raw$is_stimulation), -1, 1)
+  out <- base::data.frame(source = src, target = raw$target_genesymbol, mor = mor, stringsAsFactors = FALSE)
+  out[!base::duplicated(out[, c("source", "target")]), , drop = FALSE]
+}
+
+# PROGENy pathway-responsive genes: the `top` genes per pathway with the
+# smallest p-value, signed by their weight. Taken offline from the `progeny`
+# package when installed, otherwise from OmniPath via decoupleR.
+.hc_ui_load_pathway_network <- function(organism, top = 100) {
+  org <- if (identical(organism, "mouse")) "mouse" else "human"
+  model <- .hc_ui_get_data_object("progeny", if (identical(org, "mouse")) "model_mouse_full" else "model_human_full")
+  if (!base::is.null(model)) {
+    model <- model %>% base::as.data.frame(stringsAsFactors = FALSE)
+    model <- model[base::order(model$pathway, model$p.value), , drop = FALSE]
+    model <- base::do.call(base::rbind, base::lapply(
+      base::split(model, model$pathway),
+      function(d) utils::head(d, top)
+    ))
+    net <- base::data.frame(source = model$pathway, target = model$gene, mor = model$weight,
+                            stringsAsFactors = FALSE)
+  } else {
+    net <- tryCatch(decoupleR::get_progeny(organism = org, top = top), error = function(e) NULL)
+  }
+  if (base::is.null(net)) {
+    stop("Could not load the PROGENy model. Install the `progeny` package.", call. = FALSE)
+  }
+  out <- .hc_ui_prepare_network(
+    net = net,
+    source_candidates = c("source", "pathway"),
+    target_candidates = c("target", "gene"),
+    mor_candidates = c("mor", "weight")
+  )
+  if (base::nrow(out) == 0) {
+    stop("PROGENy network is empty after preprocessing.", call. = FALSE)
   }
   out
 }
 
-.hc_ui_load_pathway_network <- function(organism) {
-  net <- NULL
-  get_progeny_fn <- get0("get_progeny", envir = asNamespace("decoupleR"), mode = "function")
-  if (!base::is.null(get_progeny_fn)) {
-    fn_args <- base::names(base::formals(get_progeny_fn))
-    call_args <- list()
-    if ("organism" %in% fn_args) {
-      call_args$organism <- if (identical(organism, "mouse")) "mouse" else "human"
+# Hypergeometric over-representation of each regulator's targets among the
+# genes of each module, against `universe`. Regulators with fewer than
+# `minsize` targets in the universe and modules with fewer than `minsize`
+# genes are not tested. The p-values are adjusted over all module x
+# regulator tests; rows without any overlap are dropped afterwards.
+.hc_ui_module_ora <- function(module_genes, network, universe, minsize = 5, padj = "BH") {
+  network <- network[network$target %in% universe, , drop = FALSE]
+  targets <- base::lapply(base::split(network$target, network$source), base::unique)
+  targets <- targets[base::lengths(targets) >= minsize]
+  n_universe <- base::length(universe)
+  rows <- base::lapply(base::names(module_genes), function(cl) {
+    genes <- base::intersect(module_genes[[cl]], universe)
+    n <- base::length(genes)
+    if (n < minsize || base::length(targets) == 0) {
+      return(NULL)
     }
-    if ("top" %in% fn_args) {
-      call_args$top <- 500
-    }
-    net <- tryCatch(base::do.call(get_progeny_fn, call_args), error = function(e) NULL)
+    overlap <- base::lapply(targets, function(t) t[t %in% genes])
+    k <- base::lengths(overlap)
+    big_k <- base::lengths(targets)
+    base::data.frame(
+      cluster = cl,
+      term = base::names(targets),
+      n_genes = n,
+      n_targets = big_k,
+      n_overlap = k,
+      fold_enrichment = (k / n) / (big_k / n_universe),
+      pvalue = stats::phyper(k - 1, big_k, n_universe - big_k, n, lower.tail = FALSE),
+      overlap_genes = base::vapply(overlap, base::paste, base::character(1), collapse = ","),
+      stringsAsFactors = FALSE
+    )
+  })
+  rows <- rows[!base::vapply(rows, base::is.null, base::logical(1))]
+  if (base::length(rows) == 0) {
+    return(base::data.frame())
   }
-  if (base::is.null(net) && requireNamespace("progeny", quietly = TRUE)) {
-    obj_name <- if (identical(organism, "mouse")) "model_mouse_full" else "model_human_full"
-    net <- .hc_ui_get_data_object("progeny", obj_name)
-  }
-  if (base::is.null(net)) {
-    stop(
-      "Could not load PROGENy footprint model. Install `progeny` ",
-      "or use a decoupleR version exposing `get_progeny()`."
+  out <- base::do.call(base::rbind, rows)
+  out$qvalue <- stats::p.adjust(out$pvalue, method = padj)
+  out <- out[out$n_overlap > 0, , drop = FALSE]
+  base::rownames(out) <- NULL
+  out
+}
+
+# Signed score per condition for each module x regulator row of `ora`:
+# weighted mean of mor * value over the regulator's targets in the module.
+# Positive = the targets move as expected when the regulator is more active.
+# `consistency` is the share of those targets whose mor * value has the same
+# sign as the score (1 = all targets agree, 0.5 = no agreement).
+.hc_ui_module_target_scores <- function(ora, network, values) {
+  network <- network[!base::duplicated(network[, c("source", "target")]), , drop = FALSE]
+  mor_by_source <- base::lapply(
+    base::split(network, network$source),
+    function(d) stats::setNames(d$mor, d$target)
+  )
+  n_cond <- base::ncol(values)
+  per_row <- base::lapply(base::seq_len(base::nrow(ora)), function(i) {
+    genes <- base::strsplit(ora$overlap_genes[i], ",", fixed = TRUE)[[1]]
+    genes <- genes[genes %in% base::rownames(values)]
+    w <- mor_by_source[[ora$term[i]]][genes]
+    x <- values[genes, , drop = FALSE]
+    present <- !base::is.na(x)
+    signed <- x * w
+    den <- base::colSums(present * base::abs(w))
+    sc <- base::colSums(signed, na.rm = TRUE) / den
+    sc[den == 0] <- NA_real_
+    agree <- base::sign(signed) == base::matrix(base::sign(sc), nrow = base::nrow(signed), ncol = n_cond, byrow = TRUE)
+    cons <- base::colSums(agree & present, na.rm = TRUE) / base::colSums(present)
+    cons[den == 0] <- NA_real_
+    list(score = sc, consistency = cons)
+  })
+  to_mat <- function(field) {
+    base::matrix(
+      base::unlist(base::lapply(per_row, `[[`, field)),
+      nrow = base::nrow(ora),
+      byrow = TRUE,
+      dimnames = list(NULL, base::colnames(values))
     )
   }
-  out <- .hc_ui_prepare_network(
-    net = net,
-    source_candidates = c("source", "pathway", "Pathway", "pw"),
-    target_candidates = c("target", "gene", "Gene", "symbol"),
-    mor_candidates = c("mor", "weight", "Weight")
+  list(score = to_mat("score"), consistency = to_mat("consistency"))
+}
+
+# How a regulator acts on its targets in the module, from the sign of the
+# mode of regulation (CollecTRI/DoRothEA) or of the pathway response weight
+# (PROGENy): "activating" when at least two thirds of the targets are
+# positive, "repressing" when at most one third, otherwise "mixed".
+.hc_ui_module_regulation <- function(ora, network) {
+  network <- network[!base::duplicated(network[, c("source", "target")]), , drop = FALSE]
+  mor_by_source <- base::lapply(
+    base::split(network, network$source),
+    function(d) stats::setNames(d$mor, d$target)
   )
-  if (base::nrow(out) == 0) {
-    stop("PROGENy network is empty after preprocessing.")
+  base::vapply(base::seq_len(base::nrow(ora)), function(i) {
+    genes <- base::strsplit(ora$overlap_genes[i], ",", fixed = TRUE)[[1]]
+    w <- mor_by_source[[ora$term[i]]][genes]
+    w <- w[!base::is.na(w) & w != 0]
+    if (base::length(w) == 0) {
+      return("mixed")
+    }
+    share <- base::mean(w > 0)
+    if (share >= 2 / 3) "activating" else if (share <= 1 / 3) "repressing" else "mixed"
+  }, base::character(1))
+}
+
+# Correlation between a regulator's own profile and the mean profile of a
+# module across conditions (NA with fewer than 3 conditions or when the
+# regulator is not measured).
+.hc_ui_regulator_cor <- function(regulator, cluster, values, module_means) {
+  if (!regulator %in% base::rownames(values) ||
+    base::is.null(module_means) ||
+    !cluster %in% base::rownames(module_means) ||
+    base::ncol(values) < 3) {
+    return(NA_real_)
+  }
+  cols <- base::intersect(base::colnames(values), base::colnames(module_means))
+  a <- values[regulator, cols]
+  b <- module_means[cluster, cols]
+  ok <- !base::is.na(a) & !base::is.na(b)
+  if (base::sum(ok) < 3 || stats::sd(a[ok]) == 0 || stats::sd(b[ok]) == 0) {
+    return(NA_real_)
+  }
+  stats::cor(a[ok], b[ok])
+}
+
+# Regulator activity per condition with decoupleR ULM over all genes in
+# `values` (one signature per column). P-values are adjusted per condition
+# over all regulators.
+.hc_ui_condition_activity <- function(values, network, minsize = 5, padj = "BH") {
+  empty <- base::data.frame(
+    source = base::character(0), condition = base::character(0),
+    activity = base::numeric(0), activity_pvalue = base::numeric(0),
+    activity_qvalue = base::numeric(0), stringsAsFactors = FALSE
+  )
+  values <- values[stats::complete.cases(values), , drop = FALSE]
+  network <- network[network$target %in% base::rownames(values), , drop = FALSE]
+  network <- network[!base::duplicated(network[, c("source", "target")]), , drop = FALSE]
+  if (base::nrow(values) == 0 || base::nrow(network) == 0) {
+    return(empty)
+  }
+  raw <- .hc_ui_run_decouple(mat = values, network = network, method = "ulm", minsize = minsize)
+  if (base::is.null(raw) || base::nrow(raw) == 0) {
+    return(empty)
+  }
+  out <- base::data.frame(
+    source = base::as.character(raw$source),
+    condition = base::as.character(raw$condition),
+    activity = .hc_as_numeric_safely(raw$score),
+    activity_pvalue = .hc_as_numeric_safely(raw$p_value),
+    stringsAsFactors = FALSE
+  )
+  out$activity_qvalue <- stats::ave(
+    out$activity_pvalue,
+    out$condition,
+    FUN = function(p) stats::p.adjust(p, method = padj)
+  )
+  out
+}
+
+# Within each module, mark significant regulators whose overlapping genes
+# mostly repeat a better-ranked regulator (Jaccard index >= `jaccard`).
+# TFs that are themselves genes of the module are preferred as the
+# representative, then the rank. Returns the name of that regulator, or ""
+# for representatives. `ora` must be sorted by module and rank.
+.hc_ui_flag_redundant <- function(ora, keep, jaccard = 0.5) {
+  out <- base::rep("", base::nrow(ora))
+  genes <- base::strsplit(ora$overlap_genes, ",", fixed = TRUE)
+  in_module <- if ("regulator_in_module" %in% base::names(ora)) {
+    ora$regulator_in_module %in% TRUE
+  } else {
+    base::rep(FALSE, base::nrow(ora))
+  }
+  for (cl in base::unique(ora$cluster)) {
+    idx <- base::which(ora$cluster == cl & keep)
+    idx <- idx[base::order(!in_module[idx], base::seq_along(idx))]
+    reps <- base::integer(0)
+    for (i in idx) {
+      hit <- ""
+      for (r in reps) {
+        j <- base::length(base::intersect(genes[[i]], genes[[r]])) /
+          base::length(base::union(genes[[i]], genes[[r]]))
+        if (j >= jaccard) {
+          hit <- ora$term[r]
+          break
+        }
+      }
+      if (nzchar(hit)) {
+        out[i] <- hit
+      } else {
+        reps <- base::c(reps, i)
+      }
+    }
   }
   out
 }
@@ -2381,6 +2618,8 @@
     ncol = base::length(term_levels),
     dimnames = list(base::rownames(heatmap_mat), term_levels)
   )
+  # TF that is itself a gene of the module (co-expressed with its targets).
+  member_mat <- sig_mat
   src <- if (isTRUE(value_from_significant) && !base::is.null(significant_all) && base::nrow(significant_all) > 0) {
     significant_all
   } else {
@@ -2398,6 +2637,9 @@
         if (base::is.na(old_q) || (!base::is.na(new_q) && new_q < old_q)) {
           upstream_mat[rn, cn] <- .hc_first_numeric_value(src$score[k])
           q_mat[rn, cn] <- new_q
+          if ("regulator_in_module" %in% base::colnames(src)) {
+            member_mat[rn, cn] <- isTRUE(base::as.logical(src$regulator_in_module[k]))
+          }
         }
       }
     }
@@ -2464,9 +2706,16 @@
     4.8
   }
   upstream_body_w_mm <- base::max(24, n_cols_up * upstream_cell_w_mm_base * overall_plot_scale)
+  upstream_marks_title <- base::paste(c(
+    if (isTRUE(mark_significant) && base::any(sig_mat)) "* active in this condition",
+    if (base::any(member_mat)) "framed: TF is itself a gene of the module"
+  ), collapse = "    ")
+  if (!base::nzchar(upstream_marks_title)) {
+    upstream_marks_title <- NULL
+  }
   upstream_ht <- ComplexHeatmap::Heatmap(
     upstream_mat,
-    name = "Activity",
+    name = "Target score",
     col = activity_col_fun,
     na_col = "grey96",
     cluster_rows = FALSE,
@@ -2479,6 +2728,9 @@
     width = grid::unit(upstream_body_w_mm, "mm"),
     top_annotation = top_anno,
     rect_gp = grid::gpar(col = "grey85"),
+    column_title = upstream_marks_title,
+    column_title_side = "bottom",
+    column_title_gp = grid::gpar(fontsize = font_axis * 0.9, col = "grey30"),
     cell_fun = function(j, i, x, y, width, height, fill) {
       val <- upstream_mat[i, j]
       if (!base::is.na(val)) {
@@ -2507,6 +2759,15 @@
           size = q_to_pt_size(q_mat[i, j]),
           gp = grid::gpar(col = pt_col, fill = pt_col)
         )
+        if (isTRUE(member_mat[i, j])) {
+          grid::grid.rect(
+            x = x,
+            y = y,
+            width = width,
+            height = height,
+            gp = grid::gpar(col = "black", fill = NA, lwd = 1.6 * overall_plot_scale)
+          )
+        }
         if (isTRUE(mark_significant) && isTRUE(sig_mat[i, j])) {
           grid::grid.text(
             label = "*",
@@ -2561,7 +2822,7 @@
       mid = "#f7f7f7",
       high = "#d7191c",
       midpoint = 0,
-      name = "Activity"
+      name = "Target score"
     ) +
     ggplot2::scale_size_continuous(name = "-log10(FDR)") +
     ggplot2::scale_shape_manual(values = c(TF = 16, Pathway = 17)) +
@@ -2647,7 +2908,7 @@
   )
   ComplexHeatmap::Heatmap(
     hm,
-    name = "Activity",
+    name = "Target score",
     col = col_fun,
     na_col = "grey95",
     cluster_rows = FALSE,

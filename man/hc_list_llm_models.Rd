@@ -35,7 +35,7 @@ rather than aborting the whole call.
 \description{
 Queries the model-listing endpoint of each selected provider and returns the
 available models as a data frame. Supports the same providers as
-\code{\link[=hc_module_function_llm]{hc_module_function_llm()}}: Gemini, Claude (Anthropic), OpenAI/ChatGPT, and a
+\code{\link[=hc_llm_enrichment]{hc_llm_enrichment()}}: Gemini, Claude (Anthropic), OpenAI/ChatGPT, and a
 local OpenAI-compatible server (vLLM).
 }
 \examples{

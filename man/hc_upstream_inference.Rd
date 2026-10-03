@@ -11,9 +11,14 @@ hc_upstream_inference(
   clusters = c("all"),
   padj = "BH",
   qval = 0.05,
+  tf_resource = "auto",
   tf_confidence = c("A", "B", "C"),
+  progeny_top = 100,
   minsize = 5,
-  method = "ulm",
+  min_overlap = 3,
+  collapse_redundant = TRUE,
+  redundancy_jaccard = 0.5,
+  method = "ora",
   activity_input = "gfc",
   fc_comparisons = NULL,
   custom_pathway_gmt = NULL,
@@ -50,21 +55,40 @@ colors to process.}
 
 \item{qval}{Adjusted p-value threshold for significance. Default is 0.05.}
 
-\item{tf_confidence}{Character vector of DoRothEA confidence levels to keep.
-Default is \code{c("A", "B", "C")}.}
+\item{tf_resource}{TF regulon resource: \code{"auto"} (default) uses CollecTRI
+when it can be loaded (needs the \code{OmnipathR} package and internet) and
+DoRothEA from the \code{dorothea} package otherwise; \code{"collectri"} or
+\code{"dorothea"} force one of them. The resource used is stored in
+\code{settings$tf_database} and in the \code{database} column.}
 
-\item{minsize}{Minimum number of targets required per source in
-\code{decoupleR::run_ulm()}. Default is 5.}
+\item{tf_confidence}{Character vector of DoRothEA confidence levels to keep
+(DoRothEA only). Default is \code{c("A", "B", "C")}.}
 
-\item{method}{Inference method name used via \verb{decoupleR::run_<method>}.
-Currently only \code{"ulm"} is supported. Default is \code{"ulm"}.}
+\item{progeny_top}{Number of most responsive genes per PROGENy pathway
+(smallest p-value in the PROGENy model). Default is 100.}
 
-\item{activity_input}{Character scalar selecting the matrix used for
-decoupleR activity inference:
+\item{minsize}{Minimum number of targets among the network genes a
+regulator needs to be tested; also the minimum module size. Default is 5.}
+
+\item{min_overlap}{Minimum number of a regulator's targets in a module for
+the link to count as significant. Default is 3.}
+
+\item{collapse_redundant}{Logical. If \code{TRUE} (default), regulators whose
+module targets largely repeat a better-ranked regulator of the same module
+(see \code{redundancy_jaccard}) are named in the column \code{redundant_with} and
+left out of the selected (plotted) regulators; they stay in the tables.}
+
+\item{redundancy_jaccard}{Jaccard index of the module targets from which a
+regulator counts as redundant. Default is 0.5.}
+
+\item{method}{Test that links modules and regulators. Only \code{"ora"}
+(hypergeometric over-representation, default) is supported.}
+
+\item{activity_input}{Character scalar selecting the values used for the
+signed score per condition:
 \code{"gfc"} (default) uses \code{integrated_output$GFC_all_layers},
-\code{"fc"} uses user-defined pairwise fold-changes from \code{fc_comparisons},
-\code{"expression"} uses layer-wise mean expression values (anti-log transformed
-when \code{data_in_log = TRUE}) across samples.}
+\code{"fc"} uses user-defined pairwise log2 fold-changes of the group means
+from \code{fc_comparisons}.}
 
 \item{fc_comparisons}{Character vector of pairwise comparisons used only when
 \code{activity_input = "fc"}. Each entry must be formatted as
@@ -120,7 +144,8 @@ comparison), each with the matching one-column module heatmap.}
 \code{plot_per_comparison = TRUE}.
 If \code{TRUE}, per-comparison pages still show only values from the currently
 shown condition, but use a global (all-condition) term axis for
-comparability; \code{*} marks significance for the currently shown condition.
+comparability; \code{*} marks regulators linked to the module and active in
+the currently shown condition.
 If \code{FALSE}, each page uses only local selected activities from
 the shown condition and no significance marker is drawn.}
 
@@ -131,15 +156,50 @@ marker sizes. Default is 1.}
 Updated \code{HCoCenaExperiment}.
 }
 \description{
-Upstream regulator/pathway inference (S4 API)
+Links each module to transcription factors and signalling pathways whose
+target genes are over-represented among the module genes.
+}
+\details{
+For every module and regulator, a hypergeometric test compares the
+regulator's targets in the module with its targets among all network genes
+(the genes that could have landed in a module). P-values are adjusted over
+all module x regulator tests of a resource. TF regulons come from CollecTRI
+(or DoRothEA), pathway-responsive genes from PROGENy (top \code{progeny_top}
+genes per pathway) and optional custom GMT files.
+
+A link is significant when its adjusted p-value (\code{qvalue}) is at most
+\code{qval} and at least \code{min_overlap} targets lie in the module.
+
+For each link the result also reports
+\itemize{
+\item \code{score}: how the module's targets of the regulator move, as the mean
+of mode of regulation x GFC (or log2 FC) per condition; positive values
+mean the targets change as expected for a more active regulator. The
+overall score is the one of the condition with the largest absolute value
+(\code{peak_condition}).
+\item \code{consistency}: share of those targets that move in the direction of
+the score.
+\item \code{activity}, \code{activity_qvalue} (per condition): regulator activity
+estimated with \code{decoupleR::run_ulm()} over all network genes, adjusted
+per condition. A regulator counts as active in a condition when this
+activity is significant and has the same sign as the module score;
+\code{n_active_conditions} counts those conditions, and the per-condition
+heatmaps mark them with \code{*}.
+\item \code{regulator_module}, \code{regulator_in_module}, \code{regulator_cor} (TFs): the
+module of the TF gene itself and the correlation of its profile with
+the module mean. A TF co-expressed with its targets is framed in the
+heatmaps.
+\item \code{redundant_with}: a better-ranked regulator of the same module whose
+module targets largely overlap (see \code{collapse_redundant}).
+}
 }
 \examples{
 if (requireNamespace("decoupleR", quietly = TRUE)) {
   hc <- hc_example_data("clustered")
   gmt <- system.file("extdata", "toy_celltype_markers.gmt",
                      package = "hcocena")
-  # Pathway activity from a local GMT; the DoRothEA TF priors
-  # (`resources = "TF"`) need the `dorothea` package.
+  # Pathways from a local GMT; TF regulons (`resources = "TF"`) need
+  # the `OmnipathR` (CollecTRI) or `dorothea` package.
   hc <- hc_upstream_inference(
     hc,
     resources = "Pathway",

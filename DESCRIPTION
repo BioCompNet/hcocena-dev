@@ -1,7 +1,7 @@
 Package: hcocena
 Title: Horizontal Integration and Analysis of Multiple Transcriptomics
         Datasets
-Version: 0.99.11
+Version: 0.99.12
 Authors@R: c(
     person(given = "Lisa",
            family = "Holsten",
@@ -44,7 +44,7 @@ Imports: Cairo (>= 1.5-12.2), circlize, clusterProfiler (>= 3.18.1),
         ComplexHeatmap (>= 2.6.2), cowplot (>= 1.1.1), dendextend (>=
         1.15.1), dplyr (>= 1.0.6), factoextra (>= 1.0.7), ggplot2 (>=
         3.3.5), ggsci (>= 2.9), graphics (>= 4.0.3), grDevices (>=
-        4.0.3), grid (>= 4.0.3), gridExtra (>= 2.3), gtable, gtools (>=
+        4.0.3), grid (>= 4.0.3), gtools (>=
         3.9.2), Hmisc (>= 4.5-0), httr (>= 1.4.2), igraph (>= 1.2.6),
         jsonlite (>= 1.7.2), leidenAlg (>= 0.1.1), leidenbase (>=
         0.1.25), magrittr (>= 2.0.1), Matrix, methods,
@@ -54,10 +54,10 @@ Imports: Cairo (>= 1.5-12.2), circlize, clusterProfiler (>= 3.18.1),
         rlist (>= 0.4.6.1), S4Vectors, scales (>= 1.1.1), stringi (>=
         1.6.2), stringr (>= 1.5.1), SummarizedExperiment, tibble (>=
         3.1.2), tidyselect (>= 1.1.1), zip (>= 2.3.0)
-Suggests: BiocStyle, CALIBERrfimpute, decoupleR, dorothea, ellmer,
+Suggests: BiocStyle, CALIBERrfimpute, clipr, decoupleR, dorothea, ellmer,
         emmeans, ggh4x, ggrepel, graphlayouts, GSVA, htmlwidgets,
         knitr (>= 1.33), lme4, limma, mice, networkD3 (>= 0.4),
-        nlme, png, progeny, RANN, RCy3 (>= 2.10.2), RcppAnnoy, repr, rmarkdown,
+        nlme, OmnipathR, png, progeny, RANN, RCy3 (>= 2.10.2), RcppAnnoy, repr, rmarkdown,
         SingleCellExperiment, testthat (>= 3.0.0), umap, uwot, withr
 VignetteBuilder: knitr
 Config/testthat/edition: 3

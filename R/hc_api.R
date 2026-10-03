@@ -3023,6 +3023,42 @@ hc_functional_enrichment <- function(hc,
 #
 #' Upstream regulator/pathway inference (S4 API)
 #'
+#' Links each module to transcription factors and signalling pathways whose
+#' target genes are over-represented among the module genes.
+#'
+#' For every module and regulator, a hypergeometric test compares the
+#' regulator's targets in the module with its targets among all network genes
+#' (the genes that could have landed in a module). P-values are adjusted over
+#' all module x regulator tests of a resource. TF regulons come from CollecTRI
+#' (or DoRothEA), pathway-responsive genes from PROGENy (top `progeny_top`
+#' genes per pathway) and optional custom GMT files.
+#'
+#' A link is significant when its adjusted p-value (`qvalue`) is at most
+#' `qval` and at least `min_overlap` targets lie in the module.
+#'
+#' For each link the result also reports
+#' \itemize{
+#'   \item `score`: how the module's targets of the regulator move, as the mean
+#'     of mode of regulation x GFC (or log2 FC) per condition; positive values
+#'     mean the targets change as expected for a more active regulator. The
+#'     overall score is the one of the condition with the largest absolute value
+#'     (`peak_condition`).
+#'   \item `consistency`: share of those targets that move in the direction of
+#'     the score.
+#'   \item `activity`, `activity_qvalue` (per condition): regulator activity
+#'     estimated with `decoupleR::run_ulm()` over all network genes, adjusted
+#'     per condition. A regulator counts as active in a condition when this
+#'     activity is significant and has the same sign as the module score;
+#'     `n_active_conditions` counts those conditions, and the per-condition
+#'     heatmaps mark them with `*`.
+#'   \item `regulator_module`, `regulator_in_module`, `regulator_cor` (TFs): the
+#'     module of the TF gene itself and the correlation of its profile with
+#'     the module mean. A TF co-expressed with its targets is framed in the
+#'     heatmaps.
+#'   \item `redundant_with`: a better-ranked regulator of the same module whose
+#'     module targets largely overlap (see `collapse_redundant`).
+#' }
+#'
 #' @param hc A `HCoCenaExperiment`.
 #' @return Updated `HCoCenaExperiment`.
 #' @rdname hc_upstream_inference
@@ -3035,18 +3071,32 @@ hc_functional_enrichment <- function(hc,
 #' @param padj Multiple-testing correction method passed to
 #'   [stats::p.adjust()]. Default is `"BH"`.
 #' @param qval Adjusted p-value threshold for significance. Default is 0.05.
-#' @param tf_confidence Character vector of DoRothEA confidence levels to keep.
-#'   Default is `c("A", "B", "C")`.
-#' @param minsize Minimum number of targets required per source in
-#'   `decoupleR::run_ulm()`. Default is 5.
-#' @param method Inference method name used via `decoupleR::run_<method>`.
-#'   Currently only `"ulm"` is supported. Default is `"ulm"`.
-#' @param activity_input Character scalar selecting the matrix used for
-#'   decoupleR activity inference:
+#' @param tf_resource TF regulon resource: `"auto"` (default) uses CollecTRI
+#'   when it can be loaded (needs the `OmnipathR` package and internet) and
+#'   DoRothEA from the `dorothea` package otherwise; `"collectri"` or
+#'   `"dorothea"` force one of them. The resource used is stored in
+#'   `settings$tf_database` and in the `database` column.
+#' @param tf_confidence Character vector of DoRothEA confidence levels to keep
+#'   (DoRothEA only). Default is `c("A", "B", "C")`.
+#' @param progeny_top Number of most responsive genes per PROGENy pathway
+#'   (smallest p-value in the PROGENy model). Default is 100.
+#' @param minsize Minimum number of targets among the network genes a
+#'   regulator needs to be tested; also the minimum module size. Default is 5.
+#' @param min_overlap Minimum number of a regulator's targets in a module for
+#'   the link to count as significant. Default is 3.
+#' @param collapse_redundant Logical. If `TRUE` (default), regulators whose
+#'   module targets largely repeat a better-ranked regulator of the same module
+#'   (see `redundancy_jaccard`) are named in the column `redundant_with` and
+#'   left out of the selected (plotted) regulators; they stay in the tables.
+#' @param redundancy_jaccard Jaccard index of the module targets from which a
+#'   regulator counts as redundant. Default is 0.5.
+#' @param method Test that links modules and regulators. Only `"ora"`
+#'   (hypergeometric over-representation, default) is supported.
+#' @param activity_input Character scalar selecting the values used for the
+#'   signed score per condition:
 #'   `"gfc"` (default) uses `integrated_output$GFC_all_layers`,
-#'   `"fc"` uses user-defined pairwise fold-changes from `fc_comparisons`,
-#'   `"expression"` uses layer-wise mean expression values (anti-log transformed
-#'   when `data_in_log = TRUE`) across samples.
+#'   `"fc"` uses user-defined pairwise log2 fold-changes of the group means
+#'   from `fc_comparisons`.
 #' @param fc_comparisons Character vector of pairwise comparisons used only when
 #'   `activity_input = "fc"`. Each entry must be formatted as
 #'   `"groupA_vs_groupB"` (numerator vs denominator), e.g.
@@ -3087,7 +3137,8 @@ hc_functional_enrichment <- function(hc,
 #'   `plot_per_comparison = TRUE`.
 #'   If `TRUE`, per-comparison pages still show only values from the currently
 #'   shown condition, but use a global (all-condition) term axis for
-#'   comparability; `*` marks significance for the currently shown condition.
+#'   comparability; `*` marks regulators linked to the module and active in
+#'   the currently shown condition.
 #'   If `FALSE`, each page uses only local selected activities from
 #'   the shown condition and no significance marker is drawn.
 #' @param overall_plot_scale Numeric scaling factor for plot typography and
@@ -3098,8 +3149,8 @@ hc_functional_enrichment <- function(hc,
 #'   hc <- hc_example_data("clustered")
 #'   gmt <- system.file("extdata", "toy_celltype_markers.gmt",
 #'                      package = "hcocena")
-#'   # Pathway activity from a local GMT; the DoRothEA TF priors
-#'   # (`resources = "TF"`) need the `dorothea` package.
+#'   # Pathways from a local GMT; TF regulons (`resources = "TF"`) need
+#'   # the `OmnipathR` (CollecTRI) or `dorothea` package.
 #'   hc <- hc_upstream_inference(
 #'     hc,
 #'     resources = "Pathway",
@@ -3116,9 +3167,14 @@ hc_upstream_inference <- function(hc,
                                   clusters = c("all"),
                                   padj = "BH",
                                   qval = 0.05,
+                                  tf_resource = "auto",
                                   tf_confidence = c("A", "B", "C"),
+                                  progeny_top = 100,
                                   minsize = 5,
-                                  method = "ulm",
+                                  min_overlap = 3,
+                                  collapse_redundant = TRUE,
+                                  redundancy_jaccard = 0.5,
+                                  method = "ora",
                                   activity_input = "gfc",
                                   fc_comparisons = NULL,
                                   custom_pathway_gmt = NULL,
@@ -3143,8 +3199,13 @@ hc_upstream_inference <- function(hc,
     clusters = clusters,
     padj = padj,
     qval = qval,
+    tf_resource = tf_resource,
     tf_confidence = tf_confidence,
+    progeny_top = progeny_top,
     minsize = minsize,
+    min_overlap = min_overlap,
+    collapse_redundant = collapse_redundant,
+    redundancy_jaccard = redundancy_jaccard,
     method = method,
     activity_input = activity_input,
     fc_comparisons = fc_comparisons,
@@ -3415,6 +3476,14 @@ hc_celltype_activity_decoupler <- function(hc,
 #'   most this many enrichment edges per module (best q-values first).
 #' @param max_upstream_per_module Optional positive integer. If set, keeps at
 #'   most this many upstream edges per module (best q-values first).
+#' @param collapse_redundant_terms Logical. If `TRUE` (default), enrichment
+#'   terms whose module genes lie mostly (>= 80 %) in a better term of the same
+#'   module are left out.
+#' @param link_min_share Minimum share of a regulator's targets in the module
+#'   that must belong to a term for a term -> regulator line; the term must
+#'   also hold at least 1.5 times more of these targets than expected from its
+#'   size in the module (at most 3 terms per regulator). Regulators without
+#'   such a term are linked to the module directly. Default 0.25.
 #' @param label_mode Character scalar controlling term label density:
 #'   `"both"` (default), `"upstream_only"`, or `"focus_only"`.
 #' @param show_plot Logical; if `TRUE` (default), prints the combined overview
@@ -3470,6 +3539,8 @@ hc_plot_enrichment_upstream_network <- function(hc,
                                                 clusters = c("all"),
                                                 max_enrichment_per_module = NULL,
                                                 max_upstream_per_module = NULL,
+                                                collapse_redundant_terms = TRUE,
+                                                link_min_share = 0.25,
                                                 label_mode = "both",
                                                 show_plot = TRUE,
                                                 save_pdf = TRUE,
@@ -3490,6 +3561,8 @@ hc_plot_enrichment_upstream_network <- function(hc,
     clusters = clusters,
     max_enrichment_per_module = max_enrichment_per_module,
     max_upstream_per_module = max_upstream_per_module,
+    collapse_redundant_terms = collapse_redundant_terms,
+    link_min_share = link_min_share,
     label_mode = label_mode,
     show_plot = show_plot,
     save_pdf = save_pdf,

@@ -1,7 +1,12 @@
 #' Plot a module knowledge network from enrichment + upstream inference
 #'
-#' Builds a three-column network:
-#' modules -> enrichment terms and modules -> upstream terms (TF/Pathway).
+#' Builds a three-column network: modules -> enrichment terms -> upstream
+#' regulators (TF/Pathway). A term is linked to a regulator when a relevant
+#' share of the regulator's targets in the module belongs to the term
+#' (`link_min_share`); regulators without such a term are linked to the module
+#' directly. Arrows show how a regulator acts on its targets in the module
+#' (activating ->, repressing -|, mixed without end). Regulators that are
+#' themselves genes of a module are filled with that module's colour.
 #' The output is shown together with the hCoCena module heatmap to preserve the
 #' direct connection to module-level expression patterns. The heatmap panel
 #' automatically follows the last upstream inference settings (e.g. GFC vs FC).
@@ -16,6 +21,11 @@
 #'   most this many enrichment edges per module (best q-values first).
 #' @param max_upstream_per_module Optional positive integer. If set, keeps at
 #'   most this many upstream edges per module (best q-values first).
+#' @param collapse_redundant_terms Logical. If `TRUE` (default), enrichment
+#'   terms whose module genes lie mostly (>= 80 %) in a better term of the same
+#'   module are left out.
+#' @param link_min_share Minimum share of a regulator's targets in the module
+#'   that must belong to a term to draw a term -> regulator line. Default 0.25.
 #' @param label_mode Character scalar controlling term label density:
 #'   `"both"` (default), `"upstream_only"`, or `"focus_only"`.
 #' @param show_plot Logical; if `TRUE` (default), prints the combined overview
@@ -51,6 +61,8 @@
                                              clusters = c("all"),
                                              max_enrichment_per_module = NULL,
                                              max_upstream_per_module = NULL,
+                                             collapse_redundant_terms = TRUE,
+                                             link_min_share = 0.25,
                                              label_mode = "both",
                                              show_plot = TRUE,
                                              save_pdf = TRUE,
@@ -777,6 +789,9 @@
     out
   }
 
+  if (isTRUE(collapse_redundant_terms) && base::nrow(enrich_df) > 0) {
+    enrich_df <- .hc_kn_collapse_terms(enrich_df, contained = 0.8)
+  }
   enrich_df <- limit_per_module(enrich_df, "cluster", "qvalue", max_enrichment_per_module)
   upstream_df <- limit_per_module(upstream_df, "cluster", "qvalue", max_upstream_per_module)
   if (base::nrow(enrich_df) == 0 && base::nrow(upstream_df) == 0) {
@@ -850,6 +865,7 @@
     edge_subtype = base::character(0),
     qvalue = base::numeric(0),
     direction = base::character(0),
+    edge_from = base::character(0),
     x = base::numeric(0),
     y = base::numeric(0),
     xend = base::numeric(0),
@@ -909,6 +925,7 @@
       edge_subtype = enrich_df$database,
       qvalue = enrich_df$qvalue,
       direction = NA_character_,
+      edge_from = "module",
       stringsAsFactors = FALSE
     )
     enrich_edges$x <- x_module
@@ -917,6 +934,7 @@
     enrich_edges$yend <- enrich_y_map[enrich_edges$to_key]
   }
 
+  links <- base::data.frame()
   upstream_nodes <- base::data.frame(
     id = base::character(0),
     key = base::character(0),
@@ -936,6 +954,7 @@
     edge_subtype = base::character(0),
     qvalue = base::numeric(0),
     direction = base::character(0),
+    edge_from = base::character(0),
     x = base::numeric(0),
     y = base::numeric(0),
     xend = base::numeric(0),
@@ -947,6 +966,18 @@
     upstream_df$cluster <- base::as.character(upstream_df$cluster)
     upstream_df$term <- base::as.character(upstream_df$term)
     upstream_df$direction <- base::as.character(upstream_df$direction)
+    if ("regulation" %in% base::colnames(upstream_df)) {
+      # How the regulator acts on its targets in the module; the direction of
+      # change belongs to the per-condition heatmaps.
+      reg <- base::as.character(upstream_df$regulation)
+      upstream_df$direction <- base::ifelse(
+        reg == "activating", "activated",
+        base::ifelse(reg == "repressing", "inhibited", "mixed")
+      )
+    }
+    if (!"regulator_module" %in% base::colnames(upstream_df)) {
+      upstream_df$regulator_module <- NA_character_
+    }
     upstream_df$qvalue <- clamp_q(upstream_df$qvalue)
     upstream_df$cluster_idx <- cluster_idx_map[upstream_df$cluster]
     upstream_df$cluster_idx[base::is.na(upstream_df$cluster_idx)] <- base::length(cluster_order) + 1
@@ -964,6 +995,11 @@
         mean_cluster_idx = base::mean(sub$cluster_idx, na.rm = TRUE),
         best_q = base::min(sub$qvalue, na.rm = TRUE),
         hit_count = base::length(base::unique(sub$cluster)),
+        regulator_module = {
+          rm <- base::as.character(sub$regulator_module)
+          rm <- rm[!base::is.na(rm) & base::nzchar(rm)]
+          if (base::length(rm) > 0) rm[[1]] else NA_character_
+        },
         stringsAsFactors = FALSE
       )
     }))
@@ -984,6 +1020,7 @@
       node_subtype = upstream_meta$resource,
       x = x_upstream,
       y = y_up,
+      regulator_module = upstream_meta$regulator_module,
       stringsAsFactors = FALSE
     )
     upstream_y_map <- stats::setNames(upstream_nodes$y, upstream_nodes$key)
@@ -996,12 +1033,44 @@
       edge_subtype = upstream_df$resource,
       qvalue = upstream_df$qvalue,
       direction = upstream_df$direction,
+      edge_from = "module",
       stringsAsFactors = FALSE
     )
     upstream_edges$x <- x_module
     upstream_edges$y <- module_y_map[upstream_edges$from_key]
     upstream_edges$xend <- x_upstream
     upstream_edges$yend <- upstream_y_map[upstream_edges$to_key]
+
+    # Term -> regulator lines where the regulator's targets in the module
+    # overlap the term; such regulators are no longer linked to the module
+    # directly.
+    links <- if (base::nrow(enrich_df) > 0) {
+      .hc_kn_term_regulator_links(enrich_df, upstream_df, min_share = link_min_share, min_genes = 3)
+    } else {
+      base::data.frame()
+    }
+    if (base::nrow(links) > 0) {
+      up_row <- base::match(base::paste(links$cluster, links$up_key), base::paste(upstream_df$cluster, upstream_df$node_key))
+      link_edges <- base::data.frame(
+        from_id = base::paste0("E::", links$term_key),
+        to_id = base::paste0("U::", links$up_key),
+        from_key = links$cluster,
+        to_key = links$up_key,
+        edge_type = "upstream",
+        edge_subtype = upstream_df$resource[up_row],
+        qvalue = upstream_df$qvalue[up_row],
+        direction = upstream_df$direction[up_row],
+        edge_from = "term",
+        stringsAsFactors = FALSE
+      )
+      link_edges$x <- x_enrichment
+      link_edges$y <- enrich_y_map[links$term_key]
+      link_edges$xend <- x_upstream
+      link_edges$yend <- upstream_y_map[link_edges$to_key]
+      linked <- base::unique(base::paste(links$cluster, links$up_key))
+      upstream_edges <- upstream_edges[!base::paste(upstream_edges$from_key, upstream_edges$to_key) %in% linked, , drop = FALSE]
+      upstream_edges <- base::rbind(upstream_edges, link_edges)
+    }
   }
 
   edges <- base::rbind(enrich_edges, upstream_edges)
@@ -1244,147 +1313,6 @@
     )
   }
 
-  build_hc_heatmap_plot <- function(hm_data, overall_plot_scale) {
-    mat <- hm_data$mat
-    n_r <- base::nrow(mat)
-    n_c <- base::ncol(mat)
-    if (n_r == 0 || n_c == 0) {
-      return(NULL)
-    }
-
-    module_y <- base::rev(base::seq_len(n_r))
-    row_levels <- base::rownames(mat)
-    col_levels <- base::colnames(mat)
-    heatmap_column_labels_display <- .hc_gfc_display_col_labels(hcobject, col_levels)
-    column_gap_spec <- .hc_heatmap_column_gap_spec(
-      hcobject = hcobject,
-      cols = col_levels,
-      cluster_columns = heatmap_cluster_columns,
-      gap_mm = 0.6 * overall_plot_scale
-    )
-    column_layout <- .hc_heatmap_ggplot_column_layout(
-      cols = col_levels,
-      column_gap_spec = column_gap_spec,
-      default_cell_mm = 5
-    )
-
-    hm_long <- base::data.frame(
-      module_label = base::rep(row_levels, times = n_c),
-      condition = base::rep(col_levels, each = n_r),
-      value = base::as.vector(mat),
-      row_idx = base::rep(base::seq_len(n_r), times = n_c),
-      col_idx = base::rep(base::seq_len(n_c), each = n_r),
-      stringsAsFactors = FALSE
-    )
-    hm_long$module_label <- base::as.character(hm_long$module_label)
-    hm_long$condition <- base::as.character(hm_long$condition)
-    hm_long$y <- module_y[hm_long$row_idx]
-    hm_long$x <- column_layout$x[hm_long$col_idx]
-    hm_long$value <- .hc_as_numeric_safely(hm_long$value)
-
-    module_df <- base::data.frame(
-      cluster = hm_data$keep_clusters,
-      module_label = hm_data$module_labels,
-      module_color = hm_data$module_colors,
-      y = module_y,
-      stringsAsFactors = FALSE
-    )
-
-    gfc_pal <- grDevices::colorRampPalette(hm_data$gfc_colors)(51)
-    stored_module_label_fontsize <- cluster_calc[["module_label_fontsize"]]
-    if (!base::is.numeric(stored_module_label_fontsize) ||
-      base::length(stored_module_label_fontsize) != 1 ||
-      base::is.na(stored_module_label_fontsize) ||
-      stored_module_label_fontsize <= 0) {
-      stored_module_label_fontsize <- NULL
-    }
-    stored_module_box_to_cell_ratio <- cluster_calc[["module_box_to_cell_ratio"]]
-    if (!base::is.numeric(stored_module_box_to_cell_ratio) ||
-      base::length(stored_module_box_to_cell_ratio) != 1 ||
-      base::is.na(stored_module_box_to_cell_ratio) ||
-      stored_module_box_to_cell_ratio <= 0) {
-      stored_module_box_to_cell_ratio <- NULL
-    }
-    module_box_width_units <- if (!base::is.null(stored_module_box_to_cell_ratio)) {
-      base::max(0.68, base::min(1.05, stored_module_box_to_cell_ratio))
-    } else {
-      0.82
-    }
-    module_box_height_units <- 0.96
-    module_box_gap_units <- 0.16
-    heatmap_right_edge <- base::max(column_layout$x) + 0.5
-    x_mod <- heatmap_right_edge + module_box_gap_units + (module_box_width_units / 2)
-    x_right <- heatmap_right_edge + module_box_gap_units + module_box_width_units + 0.26
-    font_module <- if (!base::is.null(stored_module_label_fontsize)) {
-      stored_module_label_fontsize
-    } else {
-      base::max(6.8, base::min(12, 9.4 * overall_plot_scale))
-    }
-    module_text_size <- base::max(2.2, base::min(5.2, font_module / 2.845276))
-
-    fill_scale <- ggplot2::scale_fill_gradientn(
-      colors = gfc_pal,
-      limits = hm_data$scale_limits,
-      breaks = hm_data$scale_breaks,
-      labels = hm_data$scale_labels,
-      oob = scales::squish,
-      name = hm_data$value_name,
-      guide = "none"
-    )
-
-    ggplot2::ggplot(hm_long, ggplot2::aes(x = x, y = y, fill = value)) +
-      ggplot2::geom_tile(color = "black", linewidth = 0.3) +
-      ggplot2::geom_tile(
-        data = module_df,
-        ggplot2::aes(x = x_mod, y = y),
-        inherit.aes = FALSE,
-        fill = module_df$module_color,
-        color = "black",
-        width = module_box_width_units,
-        height = module_box_height_units
-      ) +
-      ggplot2::geom_text(
-        data = module_df,
-        ggplot2::aes(x = x_mod, y = y, label = module_label),
-        inherit.aes = FALSE,
-        color = "white",
-        fontface = "bold",
-        size = module_text_size
-      ) +
-      fill_scale +
-      ggplot2::scale_x_continuous(
-        limits = c(column_layout$limits[[1]], x_right),
-        breaks = column_layout$x,
-        labels = heatmap_column_labels_display,
-        expand = ggplot2::expansion(mult = 0, add = 0)
-      ) +
-      ggplot2::scale_y_continuous(
-        limits = c(0.5, n_r + 0.5),
-        breaks = NULL,
-        expand = ggplot2::expansion(mult = 0, add = 0)
-      ) +
-      {
-        if (base::nrow(column_layout$slice_df) > 0) {
-          ggplot2::annotate(
-            "text",
-            x = column_layout$slice_df$x,
-            y = n_r + 0.72,
-            label = column_layout$slice_df$title,
-            fontface = "bold",
-            size = base::max(3.2, 3.7 * overall_plot_scale)
-          )
-        }
-      } +
-      ggplot2::coord_cartesian(clip = "off") +
-      ggplot2::theme_void(base_size = 11 * overall_plot_scale) +
-      ggplot2::theme(
-        legend.position = "none",
-        axis.text.x = ggplot2::element_blank(),
-        axis.ticks.x = ggplot2::element_blank(),
-        plot.margin = grid::unit(c(4.2, 0.25, 1.2, 2.6) * overall_plot_scale, "mm")
-      )
-  }
-
   hc_heatmap_data <- build_hc_heatmap_data(
     cluster_order = cluster_order,
     module_label_map = module_label_map,
@@ -1402,10 +1330,6 @@
   if (base::is.null(hc_heatmap_data)) {
     stop("Unable to build hCoCena heatmap panel for the network plot.")
   }
-  hc_heatmap_plot <- build_hc_heatmap_plot(hc_heatmap_data, overall_plot_scale = overall_plot_scale)
-  if (base::is.null(hc_heatmap_plot)) {
-    stop("Unable to build hCoCena heatmap plot for the network plot.")
-  }
   # Force exact y-alignment between heatmap rows and module rows in the network.
   cluster_order <- base::as.character(hc_heatmap_data$keep_clusters)
   module_label_map <- stats::setNames(
@@ -1420,11 +1344,9 @@
   if (base::nrow(enrich_edges) > 0) {
     enrich_edges$y <- module_y_map[base::as.character(enrich_edges$from_key)]
   }
-  if (base::nrow(upstream_edges) > 0) {
-    upstream_edges$y <- module_y_map[base::as.character(upstream_edges$from_key)]
-  }
-  edges$y <- module_y_map[base::as.character(edges$from_key)]
-  missing_edge_y <- base::is.na(edges$y)
+  from_module <- edges$edge_from == "module"
+  edges$y[from_module] <- module_y_map[base::as.character(edges$from_key[from_module])]
+  missing_edge_y <- base::is.na(edges$y) | !(base::as.character(edges$from_key) %in% cluster_order)
   if (base::any(missing_edge_y)) {
     edges <- edges[!missing_edge_y, , drop = FALSE]
     if (base::nrow(edges) == 0) {
@@ -1432,460 +1354,50 @@
     }
   }
 
-  trim_label <- function(x, max_chars = 52) {
-    x <- base::as.character(x)
-    too_long <- base::nchar(x) > max_chars
-    x[too_long] <- base::paste0(base::substr(x[too_long], 1, max_chars - 1), "...")
-    x
-  }
-
-  line_breaks <- c(1.3, 2, 3, 5, 8)
-  max_line_metric <- base::max(edges$neglog10_q, na.rm = TRUE)
-  line_breaks <- line_breaks[line_breaks <= (max_line_metric + 1e-8)]
-  if (base::length(line_breaks) == 0) {
-    line_breaks <- pretty(c(0, max_line_metric), n = 3)
-    line_breaks <- line_breaks[line_breaks > 0]
-  }
-  if (base::length(line_breaks) == 0) {
-    line_breaks <- base::c(1)
-  }
-
-  overview_title <- base::paste0(
-    "Module knowledge network (enrichment: ", enrichment_mode,
-    ", upstream: ", upstream_mode, ")"
+  hm_cols <- base::colnames(hc_heatmap_data$mat)
+  page_column_gap_spec <- .hc_heatmap_column_gap_spec(
+    hcobject = hcobject,
+    cols = hm_cols,
+    cluster_columns = heatmap_cluster_columns,
+    gap_mm = 0.6 * overall_plot_scale
   )
-  network_subtitle <- "Squares = modules, circles = terms; line width reflects significance; arrows = activation; T-end = inhibition"
-  page_title_for_focus <- function(focus_cluster = NULL) {
-    if (base::is.null(focus_cluster)) {
-      return(overview_title)
-    }
-    cl <- base::as.character(focus_cluster[[1]])
-    lbl <- module_label_map[[cl]]
-    if (base::is.null(lbl) || base::is.na(lbl) || lbl == "") {
-      lbl <- cl
-    }
-    base::paste0(overview_title, " - focus on ", lbl)
-  }
-
-  build_network_plot <- function(focus_cluster = NULL,
-                                 show_headers = FALSE,
-                                 show_titles = FALSE) {
-    edges_plot <- edges
-    modules_plot <- module_nodes
-    enrich_plot <- enrich_nodes
-    upstream_plot <- upstream_nodes
-
-    focus_label <- NULL
-    if (!base::is.null(focus_cluster)) {
-      focus_cluster <- base::as.character(focus_cluster[[1]])
-      if (focus_cluster %in% cluster_order) {
-        focus_label <- module_label_map[[focus_cluster]]
-      } else {
-        focus_cluster <- NULL
-      }
-    }
-
-    if (base::is.null(focus_cluster)) {
-      edges_plot$is_focus <- TRUE
-      edges_plot$line_group_plot <- edges_plot$line_group
-      edges_plot$alpha_plot <- edges_plot$edge_alpha
-      modules_plot$is_focus <- TRUE
-      enrich_plot$is_focus <- TRUE
-      upstream_plot$is_focus <- TRUE
-    } else {
-      edges_plot$is_focus <- base::as.character(edges_plot$from_key) == focus_cluster
-      edges_plot$line_group_plot <- ifelse(edges_plot$is_focus, edges_plot$line_group, ".greyed")
-      edges_plot$alpha_plot <- ifelse(edges_plot$is_focus, edges_plot$edge_alpha, 0.08)
-      modules_plot$is_focus <- base::as.character(modules_plot$key) == focus_cluster
-      focus_enrichment <- base::unique(edges_plot$to_id[edges_plot$is_focus & edges_plot$edge_type == "enrichment"])
-      focus_upstream <- base::unique(edges_plot$to_id[edges_plot$is_focus & edges_plot$edge_type == "upstream"])
-      enrich_plot$is_focus <- enrich_plot$id %in% focus_enrichment
-      upstream_plot$is_focus <- upstream_plot$id %in% focus_upstream
-    }
-
-    cmap <- line_color_map
-    cmap[[".greyed"]] <- "grey83"
-    line_group_labels <- stats::setNames(base::names(cmap), base::names(cmap))
-    line_group_labels[["TF activated"]] <- "TF activated  ->"
-    line_group_labels[["TF inhibited"]] <- "TF inhibited  -|- (T-end)"
-    line_group_labels[["Pathway activated"]] <- "Pathway activated  ->"
-    line_group_labels[["Pathway inhibited"]] <- "Pathway inhibited  -|- (T-end)"
-    color_breaks <- base::unique(edges_plot$line_group_plot[edges_plot$line_group_plot != ".greyed"])
-    color_breaks <- line_group_order[line_group_order %in% color_breaks]
-    if (base::length(color_breaks) == 0) {
-      color_breaks <- base::setdiff(base::unique(edges_plot$line_group_plot), ".greyed")
-    }
-
-    modules_plot$fill_plot <- ifelse(modules_plot$is_focus, modules_plot$node_color, "grey85")
-    modules_plot$stroke_plot <- ifelse(modules_plot$is_focus, "black", "grey70")
-    modules_plot$text_plot <- ifelse(modules_plot$is_focus, "black", "grey65")
-    enrich_plot$stroke_plot <- ifelse(enrich_plot$is_focus, "#666666", "grey82")
-    enrich_plot$text_plot <- ifelse(enrich_plot$is_focus, "black", "grey72")
-    upstream_plot$stroke_plot <- ifelse(upstream_plot$is_focus, "#666666", "grey82")
-    upstream_plot$text_plot <- ifelse(upstream_plot$is_focus, "black", "grey72")
-    enrich_plot$label_plot <- trim_label(enrich_plot$label, max_chars = 42)
-    upstream_plot$label_plot <- trim_label(upstream_plot$label, max_chars = 34)
-    if (identical(label_mode, "upstream_only")) {
-      enrich_plot$label_plot[] <- ""
-    }
-    if (identical(label_mode, "focus_only") && base::is.null(focus_cluster)) {
-      enrich_plot$label_plot[] <- ""
-      upstream_plot$label_plot[] <- ""
-    }
-    if (!base::is.null(focus_cluster)) {
-      enrich_plot$label_plot[!enrich_plot$is_focus] <- ""
-      upstream_plot$label_plot[!upstream_plot$is_focus] <- ""
-    }
-
-    module_label_df <- modules_plot[, c("x", "y", "label", "text_plot"), drop = FALSE]
-    enrich_label_df <- enrich_plot[, c("x", "y", "label_plot", "text_plot"), drop = FALSE]
-    upstream_label_df <- upstream_plot[, c("x", "y", "label_plot", "text_plot"), drop = FALSE]
-    node_legend_df <- base::data.frame(x = c(0, 0), y = c(0, 0), node_type = c("Module node", "Term node"), stringsAsFactors = FALSE)
-    label_nudge_y <- 0.22
-    term_label_size <- if (base::is.null(focus_cluster)) {
-      (7.5 * overall_plot_scale) / 3.2
-    } else {
-      (9.2 * overall_plot_scale) / 3.2
-    }
-    use_check_overlap <- base::is.null(focus_cluster)
-    font_base <- 9.4 * overall_plot_scale
-    edges_plot_non_activated <- edges_plot[
-      !(edges_plot$edge_type == "upstream" & edges_plot$direction_class %in% c("activated", "inhibited")), ,
-      drop = FALSE
-    ]
-    edges_plot_activated <- edges_plot[
-      edges_plot$edge_type == "upstream" & edges_plot$direction_class == "activated", ,
-      drop = FALSE
-    ]
-    edges_plot_inhibited <- edges_plot[
-      edges_plot$edge_type == "upstream" & edges_plot$direction_class == "inhibited", ,
-      drop = FALSE
-    ]
-    inhibited_stems <- edges_plot_inhibited[0, , drop = FALSE]
-    inhibited_tbars <- base::data.frame(
-      x = base::numeric(0),
-      y = base::numeric(0),
-      xend = base::numeric(0),
-      yend = base::numeric(0),
-      line_group_plot = base::character(0),
-      alpha_plot = base::numeric(0),
-      stringsAsFactors = FALSE
-    )
-    if (base::nrow(edges_plot_inhibited) > 0) {
-      # Correct perpendicular direction for non-square plotting panels so T-ends
-      # are visually orthogonal to the line on screen.
-      dev_size <- tryCatch(grDevices::dev.size("in"), error = function(e) base::c(10, 7))
-      if (base::length(dev_size) < 2 || base::any(!base::is.finite(dev_size)) || base::any(dev_size <= 0)) {
-        dev_size <- base::c(10, 7)
-      }
-      panel_aspect <- (dev_size[[2]] * 0.905) / (dev_size[[1]] * 0.65)
-      xrange <- base::max(1e-6, diff(x_limits))
-      yrange <- base::max(1, base::length(cluster_order))
-      perp_corr <- panel_aspect * (xrange / yrange)
-      perp_corr <- base::max(1e-6, perp_corr)
-
-      dx <- edges_plot_inhibited$xend - edges_plot_inhibited$x
-      dy <- edges_plot_inhibited$yend - edges_plot_inhibited$y
-      seg_len <- base::sqrt(dx^2 + dy^2)
-      seg_len[seg_len == 0] <- 1
-      ux <- dx / seg_len
-      uy <- dy / seg_len
-      t_offset <- 0.085
-      t_center_x <- edges_plot_inhibited$xend - (ux * t_offset)
-      t_center_y <- edges_plot_inhibited$yend - (uy * t_offset)
-      inhibited_stems <- edges_plot_inhibited
-      inhibited_stems$xend <- t_center_x
-      inhibited_stems$yend <- t_center_y
-      px_raw <- -dy * perp_corr
-      py_raw <- dx / perp_corr
-      p_len <- base::sqrt(px_raw^2 + py_raw^2)
-      p_len[p_len == 0] <- 1
-      px <- px_raw / p_len
-      py <- py_raw / p_len
-      bar_half <- 0.126
-      inhibited_tbars <- base::data.frame(
-        x = t_center_x + (px * bar_half),
-        y = t_center_y + (py * bar_half),
-        xend = t_center_x - (px * bar_half),
-        yend = t_center_y - (py * bar_half),
-        line_group_plot = edges_plot_inhibited$line_group_plot,
-        alpha_plot = ifelse(edges_plot_inhibited$is_focus, 1, edges_plot_inhibited$alpha_plot),
-        stringsAsFactors = FALSE
-      )
-    }
-    inhibited_tbar_linewidth <- base::max(1.15, 1.7 * overall_plot_scale)
-
-    p <- ggplot2::ggplot() +
-      ggplot2::geom_segment(
-        data = edges_plot_non_activated,
-        ggplot2::aes(
-          x = x, y = y, xend = xend, yend = yend,
-          color = line_group_plot,
-          linewidth = neglog10_q,
-          alpha = alpha_plot
-        ),
-        lineend = "round"
-      ) +
-      ggplot2::geom_segment(
-        data = edges_plot_activated,
-        ggplot2::aes(
-          x = x, y = y, xend = xend, yend = yend,
-          color = line_group_plot,
-          linewidth = neglog10_q,
-          alpha = alpha_plot
-        ),
-        lineend = "round",
-        arrow = grid::arrow(
-          type = "closed",
-          length = grid::unit(2.2 * overall_plot_scale, "mm")
-        )
-      ) +
-      ggplot2::geom_segment(
-        data = inhibited_stems,
-        ggplot2::aes(
-          x = x, y = y, xend = xend, yend = yend,
-          color = line_group_plot,
-          linewidth = neglog10_q,
-          alpha = alpha_plot
-        ),
-        lineend = "round"
-      ) +
-      ggplot2::scale_alpha_identity(guide = "none") +
-      ggplot2::scale_color_manual(
-        values = cmap,
-        breaks = color_breaks,
-        labels = line_group_labels[color_breaks],
-        name = "Line color"
-      ) +
-      ggplot2::scale_linewidth_continuous(name = "-log10(qvalue)", breaks = line_breaks, range = c(0.25, 1.9)) +
-      ggplot2::geom_point(
-        data = modules_plot,
-        ggplot2::aes(x = x, y = y),
-        shape = 22,
-        size = 3.2 * overall_plot_scale,
-        fill = modules_plot$fill_plot,
-        color = modules_plot$stroke_plot,
-        stroke = 0.28
-      ) +
-      ggplot2::geom_point(
-        data = enrich_plot,
-        ggplot2::aes(x = x, y = y),
-        shape = 21,
-        size = 2.55 * overall_plot_scale,
-        fill = "white",
-        color = enrich_plot$stroke_plot,
-        stroke = 0.3
-      ) +
-      ggplot2::geom_point(
-        data = upstream_plot,
-        ggplot2::aes(x = x, y = y),
-        shape = 21,
-        size = 2.55 * overall_plot_scale,
-        fill = "white",
-        color = upstream_plot$stroke_plot,
-        stroke = 0.3
-      ) +
-      ggplot2::geom_segment(
-        data = inhibited_tbars,
-        ggplot2::aes(
-          x = x, y = y, xend = xend, yend = yend,
-          color = line_group_plot,
-          alpha = alpha_plot
-        ),
-        linewidth = inhibited_tbar_linewidth,
-        lineend = "butt",
-        show.legend = FALSE
-      ) +
-      ggplot2::geom_text(
-        data = module_label_df,
-        ggplot2::aes(x = x - 0.05, y = y, label = label),
-        hjust = 1,
-        size = font_base / 3.2,
-        fontface = "bold",
-        color = module_label_df$text_plot
-      ) +
-      ggplot2::geom_text(
-        data = enrich_label_df,
-        ggplot2::aes(x = x, y = y + label_nudge_y, label = label_plot),
-        hjust = 0.5,
-        vjust = 0,
-        size = term_label_size,
-        color = enrich_label_df$text_plot,
-        check_overlap = use_check_overlap
-      ) +
-      ggplot2::geom_text(
-        data = upstream_label_df,
-        ggplot2::aes(x = x, y = y + label_nudge_y, label = label_plot),
-        hjust = 0.5,
-        vjust = 0,
-        size = term_label_size,
-        color = upstream_label_df$text_plot,
-        check_overlap = use_check_overlap
-      ) +
-      ggplot2::geom_point(
-        data = node_legend_df,
-        ggplot2::aes(x = x, y = y, shape = node_type),
-        alpha = 0
-      ) +
-      ggplot2::scale_shape_manual(name = "Nodes", values = c("Module node" = 22, "Term node" = 21)) +
-      ggplot2::guides(
-        color = ggplot2::guide_legend(order = 1, override.aes = list(alpha = 1, linewidth = 1.8)),
-        linewidth = ggplot2::guide_legend(order = 2),
-        shape = ggplot2::guide_legend(
-          order = 3,
-          override.aes = list(
-            alpha = 1,
-            fill = c("grey60", "white"),
-            color = c("black", "#666666"),
-            size = c(4, 3.6),
-            stroke = c(0.35, 0.35)
-          )
-        )
-      ) +
-      ggplot2::scale_x_continuous(
-        limits = x_limits,
-        breaks = NULL,
-        expand = ggplot2::expansion(mult = 0, add = 0)
-      ) +
-      ggplot2::scale_y_continuous(
-        limits = c(0.5, base::length(cluster_order) + 0.5),
-        breaks = NULL,
-        expand = ggplot2::expansion(mult = 0, add = 0)
-      ) +
-      ggplot2::coord_cartesian(
-        clip = "off"
-      ) +
-      ggplot2::theme_void(base_size = 11 * overall_plot_scale) +
-      ggplot2::theme(
-        plot.title = if (isTRUE(show_titles)) {
-          ggplot2::element_text(face = "bold", size = 13 * overall_plot_scale, hjust = 0.5)
-        } else {
-          ggplot2::element_blank()
-        },
-        plot.subtitle = if (isTRUE(show_titles)) {
-          ggplot2::element_text(size = 9.8 * overall_plot_scale, hjust = 0.5, color = "grey30")
-        } else {
-          ggplot2::element_blank()
-        },
-        legend.title = ggplot2::element_text(size = 10 * overall_plot_scale, face = "bold"),
-        legend.text = ggplot2::element_text(size = 8.7 * overall_plot_scale),
-        legend.box = "vertical",
-        legend.spacing.y = grid::unit(1.2 * overall_plot_scale, "mm"),
-        plot.margin = grid::unit(
-          c(
-            if (isTRUE(show_titles)) 8 else 1.5,
-            22,
-            2,
-            1.1
-          ) * overall_plot_scale,
-          "mm"
-        )
-      )
-
-    if (isTRUE(show_titles)) {
-      p <- p + ggplot2::labs(
-        title = if (base::is.null(focus_label)) {
-          overview_title
-        } else {
-          base::paste0(overview_title, " - focus on ", focus_label)
-        },
-        subtitle = network_subtitle
-      )
-    }
-    p
-  }
-
-  heatmap_grob <- ggplot2::ggplotGrob(hc_heatmap_plot)
-  header_x_norm <- (c(x_module, x_enrichment, x_upstream) - x_limits[[1]]) / (x_limits[[2]] - x_limits[[1]])
-  build_network_column_header_grob <- function(network_grob) {
-    panel_layout_idx <- which(network_grob$layout$name == "panel")
-    if (base::length(panel_layout_idx) == 0) {
-      return(grid::nullGrob())
-    }
-    panel_layout_idx <- panel_layout_idx[[1]]
-    panel_l <- network_grob$layout$l[[panel_layout_idx]]
-    panel_r <- network_grob$layout$r[[panel_layout_idx]]
-    header_tbl <- gtable::gtable(
-      widths = network_grob$widths,
-      heights = grid::unit(1, "null")
-    )
-    header_text <- grid::grobTree(
-      grid::textGrob(
-        label = "Modules",
-        x = header_x_norm[[1]],
-        y = 0.5,
-        just = "center",
-        gp = grid::gpar(fontsize = 10.5 * overall_plot_scale, fontface = "bold")
-      ),
-      grid::textGrob(
-        label = "Enriched terms/pathways",
-        x = header_x_norm[[2]],
-        y = 0.5,
-        just = "center",
-        gp = grid::gpar(fontsize = 10.5 * overall_plot_scale, fontface = "bold")
-      ),
-      grid::textGrob(
-        label = "Inferred TF/Pathway",
-        x = header_x_norm[[3]],
-        y = 0.5,
-        just = "center",
-        gp = grid::gpar(fontsize = 10.5 * overall_plot_scale, fontface = "bold")
-      )
-    )
-    gtable::gtable_add_grob(
-      x = header_tbl,
-      grobs = header_text,
-      t = 1,
-      l = panel_l,
-      r = panel_r,
-      clip = "off",
-      name = "network_column_headers"
+  page_column_layout <- .hc_heatmap_ggplot_column_layout(
+    cols = hm_cols,
+    column_gap_spec = page_column_gap_spec,
+    default_cell_mm = 5
+  )
+  page_column_labels <- .hc_gfc_display_col_labels(hcobject, hm_cols)
+  enrich_page <- if (base::nrow(enrich_df) > 0) enrich_df else
+    base::data.frame(cluster = base::character(0), node_key = base::character(0), database = base::character(0),
+                     term = base::character(0), qvalue = base::numeric(0))
+  upstream_page <- if (base::nrow(upstream_df) > 0) upstream_df else
+    base::data.frame(cluster = base::character(0), node_key = base::character(0), resource = base::character(0),
+                     term = base::character(0), qvalue = base::numeric(0), direction = base::character(0),
+                     regulator_module = base::character(0))
+  overview_title <- "Module knowledge network"
+  build_page <- function(focus_cluster = NULL) {
+    .hc_kn_page_plot(
+      hm = hc_heatmap_data,
+      column_labels = page_column_labels,
+      column_layout = page_column_layout,
+      enrich_df = enrich_page[enrich_page$cluster %in% cluster_order, , drop = FALSE],
+      upstream_df = upstream_page[upstream_page$cluster %in% cluster_order, , drop = FALSE],
+      links = links,
+      focus = focus_cluster,
+      title = if (base::is.null(focus_cluster)) overview_title else
+        base::paste0(overview_title, " - ", module_label_map[[focus_cluster]]),
+      scale = overall_plot_scale
     )
   }
-
-  draw_combined_page <- function(network_plot_obj, page_title_text) {
-    top_grob <- grid::textGrob(
-      label = page_title_text,
-      x = 0.5,
-      y = 0.5,
-      just = "center",
-      gp = grid::gpar(fontsize = 13 * overall_plot_scale, fontface = "bold")
-    )
-    network_grob <- ggplot2::ggplotGrob(network_plot_obj)
-    column_header_row <- gridExtra::arrangeGrob(
-      grobs = list(grid::nullGrob(), build_network_column_header_grob(network_grob)),
-      ncol = 2,
-      widths = c(0.35, 0.65)
-    )
-    main_grob <- gridExtra::arrangeGrob(
-      grobs = list(heatmap_grob, network_grob),
-      ncol = 2,
-      widths = c(0.35, 0.65)
-    )
-    gridExtra::grid.arrange(
-      grobs = list(top_grob, column_header_row, main_grob),
-      ncol = 1,
-      heights = c(0.06, 0.04, 0.90)
-    )
-  }
-
-  overview_plot <- build_network_plot(show_headers = FALSE, show_titles = FALSE)
+  overview_page <- build_page()
+  overview_plot <- overview_page$plot
   focus_plots <- stats::setNames(
-    lapply(cluster_order, function(cl) {
-      build_network_plot(focus_cluster = cl, show_headers = FALSE, show_titles = FALSE)
-    }),
-    base::as.character(module_label_map[cluster_order])
-  )
-  focus_titles <- stats::setNames(
-    lapply(cluster_order, function(cl) page_title_for_focus(cl)),
+    lapply(cluster_order, function(cl) build_page(cl)$plot),
     base::as.character(module_label_map[cluster_order])
   )
 
-  max_term_count <- base::max(base::nrow(enrich_nodes), base::nrow(upstream_nodes), base::length(cluster_order))
-  pdf_width_auto <- base::max(14, base::min(27, 12 + 0.08 * max_term_count)) * overall_plot_scale
-  pdf_height_auto <- base::max(9, base::min(18, 8 + 0.11 * max_term_count)) * overall_plot_scale
-  pdf_width_use <- if (base::is.null(pdf_width)) pdf_width_auto else as.numeric(pdf_width)
-  pdf_height_use <- if (base::is.null(pdf_height)) pdf_height_auto else as.numeric(pdf_height)
+  pdf_width_use <- if (base::is.null(pdf_width)) overview_page$width else as.numeric(pdf_width)
+  pdf_height_use <- if (base::is.null(pdf_height)) overview_page$height else as.numeric(pdf_height)
 
   out_file <- NULL
   overview_png_files <- stats::setNames(base::character(0), base::character(0))
@@ -1903,9 +1415,9 @@
       res = 300,
       draw_page_fun = function(idx, page_key) {
         if (identical(page_key, "overview")) {
-          draw_combined_page(overview_plot, page_title_for_focus())
+          print(overview_plot)
         } else {
-          draw_combined_page(focus_plots[[page_key]], focus_titles[[page_key]])
+          print(focus_plots[[page_key]])
         }
       }
     )
@@ -1933,7 +1445,7 @@
         pointsize = pdf_pointsize,
         res = 300,
         draw_fun = function() {
-          draw_combined_page(focus_plots[[i]], focus_titles[[i]])
+          print(focus_plots[[i]])
         }
       )
       focus_files[[i]] <- focus_export_files$pdf
@@ -1942,9 +1454,9 @@
   }
 
   if (isTRUE(show_plot)) {
-    draw_combined_page(overview_plot, page_title_for_focus())
+    print(overview_plot)
     for (i in base::seq_along(focus_plots)) {
-      draw_combined_page(focus_plots[[i]], focus_titles[[i]])
+      print(focus_plots[[i]])
     }
   }
 
@@ -1988,3 +1500,400 @@
 }
 
 
+
+
+# Within each module, drop enrichment terms whose genes lie mostly (share
+# >= `contained`) in a better-ranked term that is kept, e.g. KEGG cell cycle
+# inside GO cell cycle. Terms without gene lists stay.
+.hc_kn_collapse_terms <- function(enrich_df, contained = 0.8) {
+  if (!"geneID" %in% base::colnames(enrich_df)) {
+    return(enrich_df)
+  }
+  genes <- base::strsplit(base::as.character(enrich_df$geneID), "/", fixed = TRUE)
+  keep <- base::rep(TRUE, base::nrow(enrich_df))
+  for (cl in base::unique(base::as.character(enrich_df$cluster))) {
+    idx <- base::which(base::as.character(enrich_df$cluster) == cl)
+    idx <- idx[base::order(.hc_as_numeric_safely(enrich_df$qvalue[idx]))]
+    kept <- base::integer(0)
+    for (i in idx) {
+      g <- genes[[i]]
+      if (base::length(g) == 0 || base::all(base::is.na(g))) {
+        next
+      }
+      inside <- base::any(base::vapply(kept, function(k) {
+        base::length(base::intersect(g, genes[[k]])) / base::length(g) >= contained
+      }, base::logical(1)))
+      if (inside) keep[i] <- FALSE else kept <- c(kept, i)
+    }
+  }
+  enrich_df[keep, , drop = FALSE]
+}
+
+# Term -> regulator links within a module. `share` is the fraction of the
+# regulator's targets in the module that belong to the term; `ratio` compares
+# it with the fraction of all module genes in the term, so that large generic
+# terms are not linked to every regulator. Links need `min_genes` shared genes,
+# `share >= min_share` and `ratio >= min_ratio`; per regulator and module the
+# `top` links with the highest ratio are kept.
+.hc_kn_term_regulator_links <- function(enrich_df, upstream_df, min_share = 0.25,
+                                        min_genes = 3, min_ratio = 1.5, top = 3) {
+  empty <- base::data.frame(cluster = base::character(0), term_key = base::character(0),
+                            up_key = base::character(0), n_shared = base::integer(0),
+                            share = base::numeric(0), ratio = base::numeric(0),
+                            stringsAsFactors = FALSE)
+  if (!"geneID" %in% base::colnames(enrich_df) || !"overlap_genes" %in% base::colnames(upstream_df)) {
+    return(empty)
+  }
+  term_genes <- base::strsplit(base::as.character(enrich_df$geneID), "/", fixed = TRUE)
+  reg_genes <- base::strsplit(base::as.character(upstream_df$overlap_genes), ",", fixed = TRUE)
+  module_size <- if ("n_genes" %in% base::colnames(upstream_df)) {
+    .hc_as_numeric_safely(upstream_df$n_genes)
+  } else {
+    base::rep(NA_real_, base::nrow(upstream_df))
+  }
+  out <- list()
+  for (i in base::seq_len(base::nrow(upstream_df))) {
+    targets <- reg_genes[[i]]
+    targets <- targets[!base::is.na(targets) & base::nzchar(targets)]
+    if (base::length(targets) == 0 || !base::is.finite(module_size[[i]])) next
+    same <- base::which(base::as.character(enrich_df$cluster) == base::as.character(upstream_df$cluster[[i]]))
+    rows <- base::lapply(same, function(j) {
+      n <- base::length(base::intersect(targets, term_genes[[j]]))
+      share <- n / base::length(targets)
+      ratio <- share / (base::length(term_genes[[j]]) / module_size[[i]])
+      if (n < min_genes || share < min_share || ratio < min_ratio) return(NULL)
+      base::data.frame(
+        cluster = base::as.character(upstream_df$cluster[[i]]),
+        term_key = base::as.character(enrich_df$node_key[[j]]),
+        up_key = base::as.character(upstream_df$node_key[[i]]),
+        n_shared = n, share = share, ratio = ratio,
+        stringsAsFactors = FALSE
+      )
+    })
+    rows <- base::do.call(base::rbind, rows[!base::vapply(rows, base::is.null, base::logical(1))])
+    if (!base::is.null(rows) && base::nrow(rows) > 0) {
+      out[[base::length(out) + 1]] <- utils::head(rows[base::order(-rows$ratio), , drop = FALSE], top)
+    }
+  }
+  if (base::length(out) == 0) empty else base::do.call(base::rbind, out)
+}
+
+# ---- page layout ----------------------------------------------------------
+# One page of the knowledge network, drawn as a single ggplot with a fixed
+# aspect ratio so that heatmap cells and module boxes stay square:
+#   module heatmap | upstream regulators -> modules -> enriched terms
+# Regulators point at the module they act on (arrow = activates its targets
+# in the module, T-end = represses, plain = mixed). With `focus`, the other
+# modules are greyed out and the regulator -> term links (shared genes) of the
+# focus module are drawn as dashed curves.
+
+.hc_kn_pretty_term <- function(term) {
+  term <- base::as.character(term)
+  term <- base::sub("^(HALLMARK|GOBP|GOCC|GOMF|GO|KEGG|REACTOME|WP|BIOCARTA|PID)_", "", term)
+  base::gsub("_", " ", term, fixed = TRUE)
+}
+
+.hc_kn_trim <- function(x, n) {
+  x <- base::as.character(x)
+  long <- base::nchar(x) > n
+  x[long] <- base::paste0(base::substr(x[long], 1, n - 1), "\u2026")
+  x
+}
+
+# Smooth S-shaped path between two points: horizontal at both ends, so arrow
+# heads and T-ends sit straight on the target.
+.hc_kn_curves <- function(x0, y0, x1, y1, id, n = 30) {
+  if (base::length(x0) == 0) {
+    return(base::data.frame(x = base::numeric(0), y = base::numeric(0), id = base::character(0)))
+  }
+  t <- base::seq(0, 1, length.out = n)
+  s <- 3 * t^2 - 2 * t^3
+  base::do.call(base::rbind, base::lapply(base::seq_along(x0), function(i) {
+    base::data.frame(
+      x = x0[[i]] + (x1[[i]] - x0[[i]]) * t,
+      y = y0[[i]] + (y1[[i]] - y0[[i]]) * s,
+      id = id[[i]],
+      stringsAsFactors = FALSE
+    )
+  }))
+}
+
+.hc_kn_spread <- function(n, height) {
+  if (n <= 1) {
+    return(base::rep(height / 2, n))
+  }
+  base::seq(height - 0.5, 0.5, length.out = n)
+}
+
+.hc_kn_page_plot <- function(hm, column_labels, column_layout, enrich_df, upstream_df,
+                             links, focus = NULL, title = NULL, scale = 1) {
+  mat <- hm$mat
+  n_r <- base::nrow(mat)
+  n_c <- base::ncol(mat)
+  clusters <- base::as.character(hm$keep_clusters)
+  labels <- stats::setNames(base::as.character(hm$module_labels), clusters)
+  if (!base::is.null(focus) && !focus %in% clusters) focus <- NULL
+  db_colors <- c(Go = "#4E79A7", Kegg = "#F28E2B", Hallmark = "#59A14F", Reactome = "#B07AA1")
+  reg_colors <- c(activates = "#C0392B", represses = "#2471A3", mixed = "#8C8C8C")
+
+  # -- nodes -----------------------------------------------------------------
+  terms <- if (base::nrow(enrich_df) > 0) {
+    t <- enrich_df[!base::duplicated(enrich_df$node_key), c("node_key", "database", "term"), drop = FALSE]
+    first <- base::tapply(base::match(enrich_df$cluster, clusters), enrich_df$node_key, base::min)
+    bestq <- base::tapply(enrich_df$qvalue, enrich_df$node_key, base::min)
+    t$first <- first[t$node_key]
+    t$bestq <- bestq[t$node_key]
+    t[base::order(t$first, t$bestq), , drop = FALSE]
+  } else {
+    base::data.frame(node_key = base::character(0), database = base::character(0), term = base::character(0))
+  }
+  regs <- if (base::nrow(upstream_df) > 0) {
+    r <- upstream_df[!base::duplicated(upstream_df$node_key), c("node_key", "resource", "term"), drop = FALSE]
+    first <- base::tapply(base::match(upstream_df$cluster, clusters), upstream_df$node_key, base::min)
+    bestq <- base::tapply(upstream_df$qvalue, upstream_df$node_key, base::min)
+    in_mod <- base::tapply(base::as.character(upstream_df$regulator_module), upstream_df$node_key, function(v) {
+      v <- v[!base::is.na(v) & base::nzchar(v)]
+      if (base::length(v) == 0) NA_character_ else v[[1]]
+    })
+    r$first <- first[r$node_key]
+    r$bestq <- bestq[r$node_key]
+    r$home <- base::names(labels)[base::match(in_mod[r$node_key], labels)]
+    r[base::order(r$first, r$resource != "TF", r$bestq), , drop = FALSE]
+  } else {
+    base::data.frame(node_key = base::character(0), resource = base::character(0), term = base::character(0), home = base::character(0))
+  }
+
+  height <- base::max(n_r, 0.5 * base::nrow(terms), 0.55 * base::nrow(regs))
+  offset <- (height - n_r) / 2
+  row_y <- stats::setNames(offset + n_r - base::seq_len(n_r) + 0.5, clusters)
+  char_u <- 0.215
+  reg_lab <- base::paste0(regs$term, base::ifelse(regs$resource == "TF", "", " (pathway)"))
+  term_lab <- .hc_kn_trim(.hc_kn_pretty_term(terms$term), 40)
+  hm_right <- base::max(column_layout$x)
+  x_reg <- hm_right + 2.6 + char_u * base::max(c(8, base::nchar(reg_lab))) + 0.5
+  x_mod <- x_reg + 4.5
+  x_term <- x_mod + 4.5
+  x_max <- x_term + 0.9 + 0.245 * base::max(c(10, base::nchar(term_lab)))
+  regs$y <- .hc_kn_spread(base::nrow(regs), height)
+  terms$y <- .hc_kn_spread(base::nrow(terms), height)
+  reg_y <- stats::setNames(regs$y, regs$node_key)
+  term_y <- stats::setNames(terms$y, terms$node_key)
+
+  is_focus_cluster <- function(cl) base::is.null(focus) | cl %in% focus
+  q_width <- function(q) {
+    v <- base::pmin(10, -base::log10(base::pmax(.hc_as_numeric_safely(q), 1e-300)))
+    0.35 + 1.6 * v / 10
+  }
+
+  # -- edges -------------------------------------------------------------------
+  up <- upstream_df
+  up$group <- base::ifelse(up$direction == "activated", "activates",
+                           base::ifelse(up$direction == "inhibited", "represses", "mixed"))
+  up$focus <- is_focus_cluster(up$cluster)
+  up$id <- base::paste0("U", base::seq_len(base::nrow(up)))
+  up_x1 <- x_mod - 0.62
+  reg_paths <- .hc_kn_curves(base::rep(x_reg + 0.25, base::nrow(up)), reg_y[up$node_key],
+                             base::rep(up_x1, base::nrow(up)), row_y[up$cluster], up$id)
+  reg_paths <- base::merge(reg_paths, up[, c("id", "group", "focus", "qvalue")], by = "id", sort = FALSE)
+  reg_paths$lw <- q_width(reg_paths$qvalue)
+
+  en <- enrich_df
+  en$group <- base::ifelse(en$database %in% base::names(db_colors), en$database, "Other")
+  en$focus <- is_focus_cluster(en$cluster)
+  en$id <- base::paste0("E", base::seq_len(base::nrow(en)))
+  term_paths <- .hc_kn_curves(base::rep(x_mod + 0.5, base::nrow(en)), row_y[en$cluster],
+                              base::rep(x_term - 0.25, base::nrow(en)), term_y[en$node_key], en$id)
+  term_paths <- base::merge(term_paths, en[, c("id", "group", "focus", "qvalue")], by = "id", sort = FALSE)
+  term_paths$lw <- q_width(term_paths$qvalue)
+
+  link_paths <- base::data.frame()
+  if (!base::is.null(focus) && base::nrow(links) > 0) {
+    lk <- links[links$cluster == focus & links$term_key %in% terms$node_key & links$up_key %in% regs$node_key, , drop = FALSE]
+    if (base::nrow(lk) > 0) {
+      lk$id <- base::paste0("L", base::seq_len(base::nrow(lk)))
+      link_paths <- .hc_kn_curves(base::rep(x_reg + 0.25, base::nrow(lk)), reg_y[lk$up_key],
+                                  base::rep(x_term - 0.25, base::nrow(lk)), term_y[lk$term_key], lk$id, n = 40)
+    }
+  }
+
+  grey_out <- function(df) {
+    if (base::nrow(df) == 0) return(df)
+    df$alpha <- base::ifelse(df$focus, 0.85, 0.08)
+    df
+  }
+  reg_paths <- grey_out(reg_paths)
+  term_paths <- grey_out(term_paths)
+  # draw focused edges on top
+  reg_paths <- reg_paths[base::order(reg_paths$focus), , drop = FALSE]
+  term_paths <- term_paths[base::order(term_paths$focus), , drop = FALSE]
+
+  tbars <- up[up$group == "represses", , drop = FALSE]
+  tbars <- base::data.frame(
+    x = base::rep(up_x1, base::nrow(tbars)),
+    y = row_y[tbars$cluster] - 0.22,
+    yend = row_y[tbars$cluster] + 0.22,
+    group = tbars$group,
+    alpha = base::ifelse(tbars$focus, 0.95, 0.08),
+    stringsAsFactors = FALSE
+  )
+
+  # -- node attributes -----------------------------------------------------
+  focus_regs <- base::unique(up$node_key[up$focus])
+  focus_terms <- base::unique(en$node_key[en$focus])
+  regs$active <- regs$node_key %in% focus_regs
+  terms$active <- terms$node_key %in% focus_terms
+  # Node colour = how the regulator acts on its targets (as the links);
+  # "mixed" when it differs between modules.
+  effect <- base::tapply(up$group, up$node_key, function(g) {
+    g <- base::unique(g)
+    if (base::length(g) == 1) g else "mixed"
+  })
+  regs$effect <- base::as.character(effect[regs$node_key])
+  regs$fill <- base::ifelse(regs$active, reg_colors[regs$effect], "grey92")
+  # Regulator genes that belong to a module get a tag in that module's colour.
+  tags <- regs[!base::is.na(regs$home), , drop = FALSE]
+  tags$label <- labels[tags$home]
+  tags$fill <- base::ifelse(tags$active, tags$home, "grey88")
+  tags$text <- base::ifelse(tags$active, "white", "grey60")
+  reg_label_x <- base::ifelse(base::is.na(regs$home), x_reg - 0.4, x_reg - 1.15)
+  regs$shape <- base::ifelse(regs$resource == "TF", 21, 23)
+  terms$fill <- base::ifelse(terms$active,
+                             base::ifelse(terms$database %in% base::names(db_colors), db_colors[terms$database], "grey50"),
+                             "grey90")
+  mod <- base::data.frame(cluster = clusters, label = labels[clusters], y = row_y[clusters], stringsAsFactors = FALSE)
+  mod$fill <- base::ifelse(is_focus_cluster(mod$cluster), mod$cluster, "grey88")
+  mod$text <- base::ifelse(is_focus_cluster(mod$cluster), "white", "grey60")
+  counts <- .hc_as_numeric_safely(hm$gene_counts)
+  mod$genes <- if (base::length(counts) == base::length(clusters)) {
+    base::formatC(counts, format = "d", big.mark = ",")
+  } else {
+    ""
+  }
+  lab_col <- function(active) base::ifelse(active, "grey10", "grey75")
+
+  hm_long <- base::data.frame(
+    x = base::rep(column_layout$x - 0.5, each = n_r),
+    y = base::rep(row_y[clusters], times = n_c),
+    value = base::as.vector(mat),
+    stringsAsFactors = FALSE
+  )
+  gfc_pal <- grDevices::colorRampPalette(hm$gfc_colors)(51)
+
+  # -- legends via invisible keys --------------------------------------------
+  edge_values <- c(reg_colors, db_colors, Other = "grey50")
+  edge_labels <- c(
+    activates = "Regulator activates its targets  ->",
+    represses = "Regulator represses its targets  -|",
+    mixed = "Regulator, mixed effect",
+    Go = "GO term", Kegg = "KEGG pathway", Hallmark = "Hallmark gene set",
+    Reactome = "Reactome pathway", Other = "Other term"
+  )
+  used_groups <- base::intersect(base::names(edge_values), base::unique(c(up$group, en$group)))
+  key_df <- base::data.frame(
+    x = x_mod, y = height / 2,
+    node = c("Module", "TF", "Signalling pathway (PROGENy)", "TF gene lies in this module"),
+    stringsAsFactors = FALSE
+  )
+
+  fs <- 7.2 * scale
+  p <- ggplot2::ggplot() +
+    ggplot2::geom_tile(data = hm_long, ggplot2::aes(x = x, y = y, fill = value),
+                       width = 0.94, height = 0.94, color = NA) +
+    ggplot2::scale_fill_gradientn(
+      colors = gfc_pal, limits = hm$scale_limits, breaks = hm$scale_breaks,
+      labels = hm$scale_labels, oob = scales::squish, name = hm$value_name,
+      guide = ggplot2::guide_colorbar(order = 1, barheight = grid::unit(28 * scale, "mm"),
+                                      barwidth = grid::unit(3.2 * scale, "mm"))
+    ) +
+    ggplot2::geom_tile(data = mod, ggplot2::aes(x = hm_right + 0.35, y = y), width = 0.3, height = 0.94,
+                       fill = mod$fill, color = NA) +
+    ggplot2::geom_text(data = mod, ggplot2::aes(x = hm_right + 0.62, y = y, label = genes),
+                       hjust = 0, size = fs * 0.9 / ggplot2::.pt,
+                       color = base::ifelse(is_focus_cluster(mod$cluster), "grey25", "grey70")) +
+    ggplot2::annotate("text", x = hm_right + 0.62, y = offset + n_r + 0.3, label = "genes",
+                      hjust = 0, vjust = 0, size = fs * 0.85 / ggplot2::.pt, color = "grey40",
+                      fontface = "italic") +
+    ggplot2::geom_path(data = term_paths, ggplot2::aes(x = x, y = y, group = id, color = group,
+                                                       linewidth = lw, alpha = alpha),
+                       lineend = "round") +
+    {
+      if (base::nrow(link_paths) > 0) {
+        ggplot2::geom_path(data = link_paths, ggplot2::aes(x = x, y = y, group = id),
+                           color = "grey45", linewidth = 0.35, linetype = "22", alpha = 0.8)
+      }
+    } +
+    ggplot2::geom_path(data = reg_paths[reg_paths$group != "activates", , drop = FALSE],
+                       ggplot2::aes(x = x, y = y, group = id, color = group, linewidth = lw, alpha = alpha),
+                       lineend = "round") +
+    ggplot2::geom_path(data = reg_paths[reg_paths$group == "activates", , drop = FALSE],
+                       ggplot2::aes(x = x, y = y, group = id, color = group, linewidth = lw, alpha = alpha),
+                       lineend = "round",
+                       arrow = grid::arrow(type = "closed", length = grid::unit(1.9 * scale, "mm"))) +
+    ggplot2::geom_segment(data = tbars, ggplot2::aes(x = x, xend = x, y = y, yend = yend, color = group, alpha = alpha),
+                          linewidth = 1.1, show.legend = FALSE) +
+    ggplot2::scale_color_manual(values = edge_values, breaks = used_groups, labels = edge_labels[used_groups],
+                                name = "Regulator effect / links", guide = ggplot2::guide_legend(order = 2, override.aes = list(linewidth = 1.4, alpha = 1))) +
+    ggplot2::scale_linewidth_identity() +
+    ggplot2::scale_alpha_identity() +
+    ggplot2::geom_tile(data = mod, ggplot2::aes(x = x_mod, y = y), width = 0.94, height = 0.94,
+                       fill = mod$fill, color = "grey20", linewidth = 0.25) +
+    ggplot2::geom_text(data = mod, ggplot2::aes(x = x_mod, y = y, label = label),
+                       color = mod$text, fontface = "bold", size = fs * 0.95 / ggplot2::.pt) +
+    ggplot2::geom_point(data = regs, ggplot2::aes(x = x_reg, y = y), shape = regs$shape,
+                        fill = regs$fill, color = base::ifelse(regs$active, "grey15", "grey80"),
+                        size = 2.8 * scale, stroke = 0.4) +
+    ggplot2::geom_tile(data = tags, ggplot2::aes(x = x_reg - 0.72, y = y), width = 0.62, height = 0.34,
+                       fill = tags$fill, color = NA) +
+    ggplot2::geom_text(data = tags, ggplot2::aes(x = x_reg - 0.72, y = y, label = label),
+                       color = tags$text, fontface = "bold", size = fs * 0.72 / ggplot2::.pt) +
+    ggplot2::geom_text(data = regs, ggplot2::aes(x = reg_label_x, y = y, label = reg_lab),
+                       hjust = 1, size = fs / ggplot2::.pt, color = lab_col(regs$active)) +
+    ggplot2::geom_point(data = terms, ggplot2::aes(x = x_term, y = y), shape = 21,
+                        fill = terms$fill, color = "white", size = 2.3 * scale, stroke = 0.3) +
+    ggplot2::geom_text(data = terms, ggplot2::aes(x = x_term + 0.4, y = y, label = term_lab),
+                       hjust = 0, size = fs / ggplot2::.pt, color = lab_col(terms$active)) +
+    ggplot2::annotate("text", x = column_layout$x - 0.5, y = offset - 0.3, label = column_labels,
+                      angle = 90, hjust = 1, size = fs / ggplot2::.pt, color = "grey15") +
+    ggplot2::annotate("text", x = c(base::mean(c(0, hm_right)), x_reg, x_mod, x_term),
+                      y = height + 0.9,
+                      label = c(hm$value_name, "Upstream regulators", "Modules", "Enriched terms"),
+                      hjust = c(0.5, 1, 0.5, 0), fontface = "bold", size = fs * 1.15 / ggplot2::.pt) +
+    ggplot2::geom_point(data = key_df, ggplot2::aes(x = x, y = y, shape = node), alpha = 0) +
+    ggplot2::scale_shape_manual(
+      name = "Nodes", values = c(Module = 22, TF = 21, `Signalling pathway (PROGENy)` = 23, `TF gene lies in this module` = 22),
+      breaks = key_df$node,
+      guide = ggplot2::guide_legend(order = 3, override.aes = list(
+        alpha = 1, size = c(3.2, 3.2, 3.2, 2.4), fill = c("grey55", "grey85", "grey85", "grey55"),
+        color = c("grey15", "grey15", "grey15", NA)
+      ))
+    ) +
+    ggplot2::coord_fixed(ratio = 1, xlim = c(-0.3, x_max), ylim = c(-0.3, height + 1.4), clip = "off", expand = FALSE) +
+    ggplot2::theme_void(base_size = 9 * scale) +
+    ggplot2::theme(
+      plot.title = ggplot2::element_text(face = "bold", size = 11.5 * scale, hjust = 0,
+                                         margin = ggplot2::margin(b = 6)),
+      plot.subtitle = ggplot2::element_text(size = 7.8 * scale, color = "grey35", hjust = 0,
+                                            margin = ggplot2::margin(b = 4)),
+      legend.title = ggplot2::element_text(face = "bold", size = 8.5 * scale),
+      legend.text = ggplot2::element_text(size = 7.8 * scale),
+      legend.key.height = grid::unit(4.2 * scale, "mm"),
+      legend.spacing.y = grid::unit(2 * scale, "mm"),
+      plot.margin = ggplot2::margin(10, 10, 6 + 4.3 * base::max(base::nchar(column_labels)) * scale, 10),
+      plot.background = ggplot2::element_rect(fill = "white", color = NA)
+    ) +
+    ggplot2::labs(
+      title = title,
+      subtitle = if (base::nrow(link_paths) > 0) {
+        "Dashed lines: the regulator's targets in this module are over-represented among the term's genes."
+      } else {
+        NULL
+      }
+    )
+
+  unit_in <- 0.27 * scale
+  list(
+    plot = p,
+    width = (x_max + 0.6) * unit_in + 3.4 * scale,
+    height = (height + 1.7) * unit_in + 0.55 + 0.062 * base::max(base::nchar(column_labels)) * scale
+  )
+}

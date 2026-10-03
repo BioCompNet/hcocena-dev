@@ -1,23 +1,24 @@
-#' Plot AI-assisted module function summaries
+#' Plot LLM-based module interpretations
 #'
-#' Draws a compact overview of stored AI-assisted module function summaries with
-#' a colored module box on the left and the inferred overarching function on the
-#' right.
+#' Draws the interpretations stored by [hc_llm_enrichment()] or
+#' [hc_llm_import()]: a colored module box on the left and the inferred
+#' function on the right, optionally next to the module heatmap.
 #'
 #' @param hc An `HCoCenaExperiment` with stored results from
-#'   `hc_module_function_llm()`.
-#' @param slot_name Satellite slot name used for storage. Default is
-#'   `"llm_module_function"`.
+#'   [hc_llm_enrichment()] or [hc_llm_import()].
+#' @param slot_name Slot the results were stored under. Default is
+#'   `"llm_enrichment"`.
 #' @param modules Optional character vector to subset modules.
-#' @param fields Character vector selecting which LLM fields to plot. Supported
-#'   values are `"general_processes"`, `"contextual_state"`,
-#'   `"key_regulators"`, `"rag_general_processes"`,
-#'   `"rag_contextual_state"`, and `"rag_key_regulators"`. The aliases
-#'   `"general_processes_rag"`, `"contextual_state_rag"`, and
-#'   `"key_regulators_rag"` are also accepted. Defaults to the three baseline
-#'   fields.
-#' @param max_chars Maximum number of characters shown per term. Default is
-#'   `90`.
+#' @param fields Character vector selecting which fields to plot:
+#'   `"general_processes"` (features only), `"contextual_state"` and
+#'   `"key_regulators"` (with context) and `"grounded_processes"` (with
+#'   context and evidence). Default: all four; `"grounded_processes"` is
+#'   skipped when it was not requested.
+#' @param max_chars Approximate number of characters shown per term. Longer
+#'   text is wrapped onto at most two lines (never inside parentheses); if it
+#'   still does not fit, whole processes are dropped from the end, so the text
+#'   ends at a `" / "`. Gene/protein lists in parentheses are left out of the
+#'   plot. The heatmap cells stay square. Default is `90`.
 #' @param text_size Numeric text size passed to `ggplot2::geom_text()`.
 #' @param with_heatmap Logical. If `TRUE`, reuse the stored hCoCena cluster
 #'   heatmap and place the LLM interpretations as a right-side annotation.
@@ -48,40 +49,36 @@
 #'   both PDF and PNG into the configured hCoCena output directory.
 #' @param file_stem Base file name used for exported plots. Field names and, for
 #'   single-module selections, the module label are appended automatically.
-#'   Default is `"LLM_module_function"`.
+#'   Default is `"LLM_enrichment"`.
 #' @param pdf_width Optional numeric export width in inches. If `NULL`, a
 #'   field-appropriate default is chosen.
 #' @param pdf_height Optional numeric export height in inches. If `NULL`, a
 #'   module-count dependent default is chosen.
 #' @param dpi Numeric export DPI for PNG output. Default is `300`.
-#' @param ... Used by the backward-compatible wrapper alias
-#'   `hc_plot_module_function_gemini()`.
 #'
 #' @return A single plot object when one field is selected, otherwise a named
 #'   list of plot objects.
 #' @export
 #'
 #' @examples
-#' # A stand-in for the result of hc_module_function_llm(), which needs an LLM
-#' # endpoint:
-#' hc <- hc_init()
-#' methods::slot(hc, "satellite")[["llm_module_function"]] <- list(
-#'   module_1 = list(status = "ok")
+#' # Interpretations imported from a web chat answer (no API key needed):
+#' hc <- hc_example_data("clustered")
+#' hc <- hc_plot_cluster_heatmap(hc, file_name = FALSE)
+#' hc <- hc_llm_enrichment(hc, modules = "M1", provider = "manual",
+#'                         verbose = FALSE)
+#' id <- hc_satellite(hc, "llm_enrichment_pending")$id
+#' answer <- paste0(
+#'   '{"request_id": "', id, '", "results": [{"set": "M1", ',
+#'   '"general_processes": "B cell receptor signaling", ',
+#'   '"contextual_state": "mature B cell program", ',
+#'   '"key_regulators": "PAX5 / EBF1"}]}'
 #' )
-#' methods::slot(hc, "satellite")[["llm_module_function_summary"]] <- data.frame(
-#'   module = "module_1",
-#'   module_color = "steelblue",
-#'   general_processes = "Interferon signaling",
-#'   contextual_state = "Acute antiviral activation",
-#'   key_regulators = "STAT1, IRF7",
-#'   stringsAsFactors = FALSE
-#' )
-#' p <- hc_plot_module_function_llm(hc, with_heatmap = FALSE, save = FALSE)
-#' print(p)
-hc_plot_module_function_llm <- function(hc,
-                                        slot_name = "llm_module_function",
+#' hc <- hc_llm_import(hc, text = answer, verbose = FALSE)
+#' p <- hc_plot_llm_enrichment(hc, with_heatmap = FALSE, save = FALSE)
+hc_plot_llm_enrichment <- function(hc,
+                                        slot_name = "llm_enrichment",
                                         modules = NULL,
-                                        fields = c("general_processes", "contextual_state", "key_regulators"),
+                                        fields = c("general_processes", "contextual_state", "key_regulators", "grounded_processes"),
                                         max_chars = 90,
                                         text_size = 4,
                                         with_heatmap = TRUE,
@@ -96,7 +93,7 @@ hc_plot_module_function_llm <- function(hc,
                                         module_label_pt_size = NULL,
                                         module_box_width_cm = NULL,
                                         save = TRUE,
-                                        file_stem = "LLM_module_function",
+                                        file_stem = "LLM_enrichment",
                                         pdf_width = NULL,
                                         pdf_height = NULL,
                                         dpi = 300) {
@@ -117,14 +114,14 @@ hc_plot_module_function_llm <- function(hc,
     heatmap_col_order = heatmap_col_order,
     col_order_missing = missing(col_order),
     heatmap_col_order_missing = missing(heatmap_col_order),
-    context = "hc_plot_module_function_llm()"
+    context = "hc_plot_llm_enrichment()"
   )
   cluster_columns <- .hc_resolve_cluster_columns_alias(
     cluster_columns = cluster_columns,
     heatmap_cluster_columns = heatmap_cluster_columns,
     cluster_columns_missing = missing(cluster_columns),
     heatmap_cluster_columns_missing = missing(heatmap_cluster_columns),
-    context = "hc_plot_module_function_llm()"
+    context = "hc_plot_llm_enrichment()"
   )
   if (!is.logical(cluster_columns) || length(cluster_columns) != 1 || is.na(cluster_columns)) {
     stop("`cluster_columns` must be TRUE or FALSE.")
@@ -175,7 +172,7 @@ hc_plot_module_function_llm <- function(hc,
   if (is.null(stored_results) || !is.list(stored_results) || length(stored_results) == 0) {
     stop(
       "No stored module interpretations found in `hc@satellite$", slot_name,
-      "`. Run `hc_module_function_llm()` first."
+      "`. Run `hc_llm_enrichment()` or `hc_llm_import()` first."
     )
   }
 
@@ -186,6 +183,24 @@ hc_plot_module_function_llm <- function(hc,
   if (nrow(summary_tbl) == 0) {
     stop("No module interpretation summaries are available for plotting.")
   }
+  if ("grounded_processes" %in% fields &&
+    (!"grounded_processes" %in% colnames(summary_tbl) ||
+      all(is.na(summary_tbl$grounded_processes) | summary_tbl$grounded_processes == ""))) {
+    fields <- setdiff(fields, "grounded_processes")
+    if (length(fields) == 0) {
+      stop("No results with evidence (`grounded_processes`) are stored.")
+    }
+  }
+  evidence_used <- if ("evidence" %in% colnames(summary_tbl)) {
+    ev <- unique(as.character(summary_tbl$evidence))
+    ev <- ev[!is.na(ev) & ev != "none"]
+    if (length(ev) > 0) ev[[1]] else "evidence"
+  } else {
+    "evidence"
+  }
+  field_map$title[["grounded_processes"]] <- paste0(
+    "Processes with ", gsub("+", " + ", evidence_used, fixed = TRUE)
+  )
 
   if (!is.null(modules)) {
     modules <- as.character(modules)
@@ -263,6 +278,7 @@ hc_plot_module_function_llm <- function(hc,
       ggplot2::geom_text(
         ggplot2::aes(x = 1.38, label = term_plot, color = text_color),
         hjust = 0,
+        lineheight = 0.9,
         size = text_size,
         show.legend = FALSE
       ) +
@@ -296,7 +312,7 @@ hc_plot_module_function_llm <- function(hc,
       export_file <- base::file.path(
         output_dir,
         base::paste0(
-          .hc_export_sanitize_stem(file_stem, default = "LLM_module_function"),
+          .hc_export_sanitize_stem(file_stem, default = "LLM_enrichment"),
           "_",
           module_token,
           "_",
@@ -330,46 +346,18 @@ hc_plot_module_function_llm <- function(hc,
   out
 }
 
-#' @rdname hc_plot_module_function_llm
-#' @export
-hc_plot_module_function_gemini <- function(...) {
-  hc_plot_module_function_llm(...)
-}
-
 .hc_llm_plot_field_map <- function() {
   source <- c(
     general_processes = "general_processes",
     contextual_state = "contextual_state",
     key_regulators = "key_regulators",
-    rag_general_processes = "rag_general_processes",
-    rag_contextual_state = "rag_contextual_state",
-    rag_key_regulators = "rag_key_regulators",
-    general_processes_rag = "rag_general_processes",
-    contextual_state_rag = "rag_contextual_state",
-    key_regulators_rag = "rag_key_regulators",
-    enrichment_general_processes = "enrichment_general_processes",
-    enrichment_contextual_state = "enrichment_contextual_state",
-    enrichment_key_regulators = "enrichment_key_regulators",
-    general_processes_enrichment = "enrichment_general_processes",
-    contextual_state_enrichment = "enrichment_contextual_state",
-    key_regulators_enrichment = "enrichment_key_regulators"
+    grounded_processes = "grounded_processes"
   )
   title <- c(
     general_processes = "General processes",
     contextual_state = "Contextual state",
     key_regulators = "Key regulators",
-    rag_general_processes = "General processes with RAG",
-    rag_contextual_state = "Contextual state with RAG",
-    rag_key_regulators = "Key regulators with RAG",
-    general_processes_rag = "General processes with RAG",
-    contextual_state_rag = "Contextual state with RAG",
-    key_regulators_rag = "Key regulators with RAG",
-    enrichment_general_processes = "General processes with enrichment",
-    enrichment_contextual_state = "Contextual state with enrichment",
-    enrichment_key_regulators = "Key regulators with enrichment",
-    general_processes_enrichment = "General processes with enrichment",
-    contextual_state_enrichment = "Contextual state with enrichment",
-    key_regulators_enrichment = "Key regulators with enrichment"
+    grounded_processes = "Processes with evidence"
   )
   list(source = source, title = title)
 }
@@ -857,14 +845,9 @@ print.hc_llm_heatmap_plot <- function(x, ...) {
       FUN.VALUE = character(1),
       max_chars = max_chars
     )
-  } else {
-    summary_tbl$term_plot <- vapply(
-      as.character(summary_tbl$term_plot),
-      .hc_llm_prepare_display_title,
-      FUN.VALUE = character(1),
-      max_chars = max_chars
-    )
   }
+  # An existing `term_plot` is already prepared for display; preparing it a
+  # second time would split it again at "and" and commas.
   summary_tbl$text_color <- vapply(
     as.character(summary_tbl$module_color),
     .hc_llm_darken_color,
@@ -905,7 +888,8 @@ print.hc_llm_heatmap_plot <- function(x, ...) {
   fill_cols[is.na(fill_cols) | fill_cols == ""] <- "grey70"
   label_cols[is.na(label_cols) | label_cols == ""] <- "black"
 
-  max_width_chars <- if (length(term_labels) == 0) 0 else max(nchar(term_labels), na.rm = TRUE)
+  label_lines <- unlist(strsplit(term_labels, "\n", fixed = TRUE))
+  max_width_chars <- if (length(label_lines) == 0) 0 else max(nchar(label_lines), na.rm = TRUE)
   text_width_cm <- max(7.5, min(18, (max_width_chars * 0.14) + 0.8))
 
   module_levels <- unique(module_by_row)
@@ -1027,6 +1011,15 @@ print.hc_llm_heatmap_plot <- function(x, ...) {
     which = "row"
   )
 
+  # Two-line labels get a font size that fits the row, so the heatmap cells
+  # stay square instead of the rows growing.
+  term_fontsize <- max(7.2, text_size * 2.25)
+  term_lineheight <- 0.9
+  if (any(grepl("\n", term_labels, fixed = TRUE))) {
+    cell_pt <- cell_mm / 25.4 * 72
+    term_fontsize <- min(term_fontsize, 0.92 * cell_pt / (2 * term_lineheight))
+  }
+
   right_anno <- ComplexHeatmap::HeatmapAnnotation(
     modules = module_box_anno,
     llm = ComplexHeatmap::anno_text(
@@ -1034,7 +1027,7 @@ print.hc_llm_heatmap_plot <- function(x, ...) {
       which = "row",
       just = "left",
       location = 0,
-      gp = grid::gpar(col = term_cols, fontsize = max(7.2, text_size * 2.25)),
+      gp = grid::gpar(col = term_cols, fontsize = term_fontsize, lineheight = term_lineheight),
       width = grid::unit(text_width_cm, "cm")
     ),
     which = "row",
@@ -1251,12 +1244,35 @@ print.hc_llm_heatmap_plot <- function(x, ...) {
   dend
 }
 
+# Greek letters and typographic dashes in model answers (NF-\u03baB, IFN-\u03b3)
+# break the PNG devices on Windows ("conversion failure ... mbcsToSbcs").
+# Spell them out for display; the stored answers keep the original text.
+.hc_llm_ascii_symbols <- function(x) {
+  map <- c(
+    "\u03b1" = "alpha", "\u03b2" = "beta", "\u03b3" = "gamma", "\u03b4" = "delta",
+    "\u03b5" = "epsilon", "\u03b6" = "zeta", "\u03b7" = "eta", "\u03b8" = "theta",
+    "\u03b9" = "iota", "\u03ba" = "kappa", "\u03bb" = "lambda", "\u03bc" = "mu",
+    "\u03bd" = "nu", "\u03be" = "xi", "\u03c0" = "pi", "\u03c1" = "rho",
+    "\u03c3" = "sigma", "\u03c4" = "tau", "\u03c5" = "upsilon", "\u03c6" = "phi",
+    "\u03c7" = "chi", "\u03c8" = "psi", "\u03c9" = "omega",
+    "\u0393" = "Gamma", "\u0394" = "Delta", "\u0398" = "Theta", "\u039b" = "Lambda",
+    "\u03a3" = "Sigma", "\u03a6" = "Phi", "\u03a8" = "Psi", "\u03a9" = "Omega",
+    "\u2013" = "-", "\u2014" = "-", "\u2212" = "-", "\u2192" = "->",
+    "\u2191" = "up", "\u2193" = "down", "\u2018" = "'", "\u2019" = "'",
+    "\u201c" = "\"", "\u201d" = "\"", "\u00b1" = "+/-", "\u2264" = "<=", "\u2265" = ">="
+  )
+  x <- base::enc2utf8(base::as.character(x))
+  for (g in base::names(map)) x <- base::gsub(g, map[[g]], x, fixed = TRUE)
+  x
+}
+
 .hc_llm_prepare_display_term <- function(term, max_chars = 90) {
   term <- as.character(term[[1]])
   if (!nzchar(term) || is.na(term)) {
     return("No interpretation available.")
   }
   term <- .hc_llm_clean_text(term)
+  term <- .hc_llm_ascii_symbols(term)
   term <- stringr::str_squish(term)
   term <- sub("^This module primarily reflects\\s+", "", term, ignore.case = TRUE)
   term <- sub("^This module reflects\\s+", "", term, ignore.case = TRUE)
@@ -1271,12 +1287,94 @@ print.hc_llm_heatmap_plot <- function(x, ...) {
   stringr::str_trunc(term, width = max_chars)
 }
 
-.hc_llm_prepare_display_title <- function(term, max_chars = 60) {
-  term <- .hc_llm_short_title_fallback(term = term, max_chars = max_chars)
+# Drop parentheses that only list genes/proteins, e.g. "(PADI4, S100A12,
+# CEACAM8)" or "(IFIT1 / IFIT3)", so the plot shows the processes only.
+# Parentheses that explain something in words are kept.
+.hc_llm_strip_feature_lists <- function(x) {
+  x <- base::as.character(x)
+  base::vapply(x, function(s) {
+    if (base::is.na(s)) return(s)
+    groups <- base::regmatches(s, base::gregexpr("\\s*\\([^()]*\\)", s))[[1]]
+    for (g in groups) {
+      inner <- base::gsub("^\\s*\\(|\\)$", "", g)
+      tokens <- base::strsplit(inner, "[,/;]|\\s+and\\s+|\\s+")[[1]]
+      tokens <- tokens[base::nzchar(tokens)]
+      if (base::length(tokens) == 0) next
+      symbol_like <- base::grepl("^[A-Z][A-Za-z0-9_.-]*[0-9A-Z]$|^[A-Z0-9]{2,}$", tokens)
+      if (base::mean(symbol_like) >= 0.6) {
+        s <- base::sub(g, "", s, fixed = TRUE)
+      }
+    }
+    stringr::str_squish(s)
+  }, base::character(1), USE.NAMES = FALSE)
+}
+
+# Words of `s`, with every parenthesised expression kept as one word so a
+# line break never falls inside the brackets.
+.hc_llm_wrap_tokens <- function(s) {
+  words <- base::strsplit(s, " ", fixed = TRUE)[[1]]
+  words <- words[base::nzchar(words)]
+  out <- base::character(0)
+  depth <- 0L
+  for (w in words) {
+    if (depth > 0L) {
+      out[base::length(out)] <- base::paste(out[base::length(out)], w)
+    } else {
+      out <- base::c(out, w)
+    }
+    chars <- base::strsplit(w, "", fixed = TRUE)[[1]]
+    depth <- base::max(0L, depth + base::sum(chars == "(") - base::sum(chars == ")"))
+  }
+  out
+}
+
+# Greedy word wrap of `s` into lines of at most `width` characters (a single
+# word longer than `width` gets a line of its own).
+.hc_llm_wrap_lines <- function(s, width) {
+  lines <- base::character(0)
+  current <- ""
+  for (tok in .hc_llm_wrap_tokens(s)) {
+    candidate <- if (base::nzchar(current)) base::paste(current, tok) else tok
+    if (base::nzchar(current) && base::nchar(candidate) > width) {
+      lines <- base::c(lines, current)
+      current <- tok
+    } else {
+      current <- candidate
+    }
+  }
+  if (base::nzchar(current)) lines <- base::c(lines, current)
+  lines
+}
+
+# Display text for one module on at most two lines. Gene/protein lists in
+# parentheses are left out; long text is wrapped at word boundaries, never
+# inside brackets. If two lines are not enough, whole processes are dropped
+# from the end, so the text is cut directly at a " / " and not mid-phrase.
+# Each line holds about `max_chars / 2` characters.
+.hc_llm_prepare_display_title <- function(term, max_chars = 90) {
+  term <- .hc_llm_strip_feature_lists(.hc_llm_ascii_symbols(term))
   term <- .hc_llm_clean_text(term)
   term <- stringr::str_squish(term)
-  if (!nzchar(term) || is.na(term)) {
+  if (base::length(term) == 0 || base::is.na(term) || !base::nzchar(term)) {
     return("No interpretation available")
   }
-  stringr::str_trunc(term, width = max_chars)
+  term <- base::sub("\\.$", "", term)
+  width <- base::max(20L, base::as.integer(base::ceiling(max_chars * 0.55)))
+  parts <- base::trimws(base::strsplit(term, " / ", fixed = TRUE)[[1]])
+  parts <- parts[base::nzchar(parts)]
+  for (n in base::rev(base::seq_along(parts))) {
+    lines <- .hc_llm_wrap_lines(base::paste(parts[base::seq_len(n)], collapse = " / "), width)
+    if (base::length(lines) <= 2L && base::all(base::nchar(lines) <= width)) {
+      return(base::paste(lines, collapse = "\n"))
+    }
+  }
+  # Not even the first process fits on two lines (e.g. older free-text
+  # answers): shorten it, then wrap.
+  short <- .hc_llm_short_title_fallback(term = parts[1], max_chars = 2L * width)
+  lines <- .hc_llm_wrap_lines(stringr::str_squish(short), width)
+  if (base::length(lines) > 2L || base::any(base::nchar(lines) > width)) {
+    lines <- .hc_llm_wrap_lines(stringr::str_trunc(short, width = 2L * width - 4L, side = "right"), width)
+    lines <- stringr::str_trunc(lines[base::seq_len(base::min(2L, base::length(lines)))], width = width)
+  }
+  base::paste(lines, collapse = "\n")
 }

@@ -26,3 +26,4 @@ test_llm_claude.R
 .claude/
 .codex/
 .Rhistory
+omnipathr-log/

@@ -1,3 +1,93 @@
+# hcocena 0.99.12
+
+## One simple function for LLM-based module interpretation
+
+- `hc_llm_enrichment()` replaces `hc_module_function_llm()`,
+  `hc_module_function_gemini()` and `hc_module_function_vllm()`. It needs only
+  the feature sets (modules of `hc` or any named list of genes/proteins), an
+  optional system prompt, an optional context and the provider:
+  `"claude"`, `"openai"`, `"gemini"`, `"local"` (vLLM or any
+  OpenAI-compatible server) or `"manual"`. API keys are read from the usual
+  environment variables.
+- `provider = "manual"` works without an API key: the complete request is
+  copied to the clipboard (or written to a file where no clipboard exists,
+  e.g. in Docker), pasted into the web chat of any provider, and the answer is
+  read back with the new `hc_llm_import()`. The answer is checked against the
+  request id; code fences, surrounding text and typographic quotes are
+  tolerated. Long requests are split into parts, and the next part is copied
+  automatically after each import. Imported results are stored exactly like
+  API results.
+- The default system prompt is neutral (genes, proteins, metabolites) instead
+  of being written for monocyte transcriptomics; `system_prompt =` replaces it.
+- Each set is interpreted in separate requests so that every field sees only
+  its own input: `general_processes` from the features alone (no context),
+  `contextual_state` and `key_regulators` with the context, and the new
+  `grounded_processes` (+ `supporting_evidence`) with the context and the
+  significant terms of `hc_functional_enrichment()` (`evidence =`; optionally
+  also `"upstream"` regulators and `"rag"` literature passages from a DoRAG
+  server). `hc_plot_llm_enrichment()` draws all four plots; without stored
+  enrichment the evidence request is left out. In the web-chat route this
+  means one prompt per request type, each pasted into a new chat.
+- `hc_plot_module_function_llm()` is now `hc_plot_llm_enrichment()` and reads
+  the slot `"llm_enrichment"`. The alias `hc_plot_module_function_gemini()` is
+  gone.
+- Removed with the old function: DoRAG literature retrieval and the
+  enrichment-grounded interpretation level.
+- `clipr` (Suggests) is used for clipboard access.
+- The prompt asks for `general_processes` as short phrases of at most about
+  90 characters, without naming or listing individual genes or proteins.
+- `hc_plot_llm_enrichment()` leaves gene/protein lists in parentheses out of
+  the plot and wraps long terms onto at most two lines, never inside
+  parentheses. Text that still does not fit is cut after a whole process (at a
+  `" / "`), not mid-phrase. The heatmap cells stay square.
+- Models that reject the `temperature` parameter (e.g. Claude 5) are retried
+  once without it.
+- Greek letters and typographic dashes are spelled out in plot text, which
+  the PNG devices on Windows could not draw.
+
+## Upstream inference rebuilt
+
+- `hc_upstream_inference()` now links modules and regulators by
+  over-representation: a hypergeometric test of each regulator's targets
+  among the module genes, against all network genes, with BH correction over
+  all module x regulator tests (`method = "ora"`). Before, decoupleR ULM was
+  run on the genes of one module only, so targets were compared with genes
+  that move the same way; the smallest p-value over all conditions was used
+  without correction, and scores were averaged over GFC conditions, where they
+  cancel out.
+- Per condition, the result reports the signed score of the module's targets
+  (mode of regulation x GFC/FC), the share of targets that agree
+  (`consistency`) and the regulator activity from `decoupleR::run_ulm()` over
+  all network genes (`activity`, `activity_qvalue`). The per-condition
+  heatmaps mark regulators that are linked to the module and active in the
+  condition.
+- TFs that are themselves genes of the module are reported
+  (`regulator_in_module`, `regulator_cor`) and framed in the heatmaps.
+- Regulators whose module targets repeat a better-ranked one are flagged in
+  `redundant_with` and left out of the plots (`collapse_redundant`,
+  `redundancy_jaccard`). Links need at least `min_overlap = 3` targets.
+- TF regulons come from CollecTRI when `OmnipathR` can load it and from
+  DoRothEA otherwise (`tf_resource`); the resource used is stored. PROGENy uses
+  the top `progeny_top = 100` genes per pathway; the fallback used before took
+  the whole model (all genes) as pathway targets.
+- `method = "ulm"` and `activity_input = "expression"` were removed; FC values
+  are no longer clipped at `range_GFC`.
+
+## Module knowledge network redrawn
+
+- `hc_plot_enrichment_upstream_network()` now reads causally from left to
+  right: module heatmap | upstream regulators -> modules -> enriched terms,
+  drawn as one figure with square heatmap cells and module boxes.
+- Arrows show how a regulator acts on its targets in the module (new column
+  `regulation` of `hc_upstream_inference()`: activating, repressing, mixed),
+  instead of the direction of change in the strongest condition.
+- Regulators that are themselves genes of a module are filled with that
+  module's colour; TFs and PROGENy pathways have different symbols.
+- Enrichment terms whose module genes lie mostly in a better term are left
+  out (`collapse_redundant_terms`). On the per-module pages, dashed lines
+  link a regulator to the terms over-represented among its targets
+  (`link_min_share`).
+
 # hcocena 0.99.11
 
 - `citation("hcocena")` also lists the STAR Protocols paper (Holsten et al.

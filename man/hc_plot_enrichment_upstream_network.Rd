@@ -11,6 +11,8 @@ hc_plot_enrichment_upstream_network(
   clusters = c("all"),
   max_enrichment_per_module = NULL,
   max_upstream_per_module = NULL,
+  collapse_redundant_terms = TRUE,
+  link_min_share = 0.25,
   label_mode = "both",
   show_plot = TRUE,
   save_pdf = TRUE,
@@ -43,6 +45,16 @@ most this many enrichment edges per module (best q-values first).}
 
 \item{max_upstream_per_module}{Optional positive integer. If set, keeps at
 most this many upstream edges per module (best q-values first).}
+
+\item{collapse_redundant_terms}{Logical. If \code{TRUE} (default), enrichment
+terms whose module genes lie mostly (>= 80 \%) in a better term of the same
+module are left out.}
+
+\item{link_min_share}{Minimum share of a regulator's targets in the module
+that must belong to a term for a term -> regulator line; the term must
+also hold at least 1.5 times more of these targets than expected from its
+size in the module (at most 3 terms per regulator). Regulators without
+such a term are linked to the module directly. Default 0.25.}
 
 \item{label_mode}{Character scalar controlling term label density:
 \code{"both"} (default), \code{"upstream_only"}, or \code{"focus_only"}.}
