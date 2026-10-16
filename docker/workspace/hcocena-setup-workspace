@@ -1,0 +1,20 @@
+#!/bin/sh
+# Fill a home directory with the hCoCena workspace:
+#   ~/README_hcocena.md, ~/reference_files/, ~/projects/example_project/
+# Runs at container start and at every R session start, so the workspace also
+# appears when a platform mounts its own /home. It only acts once per home
+# (marker file) and never overwrites or recreates anything the user changed.
+TEMPLATES=/usr/local/share/hcocena
+TARGET="${1:-$HOME}"
+[ -d "$TARGET" ] && [ -w "$TARGET" ] || exit 0
+MARKER="$TARGET/.hcocena_workspace"
+[ -e "$MARKER" ] && exit 0
+
+[ -e "$TARGET/reference_files" ] || cp -r "$TEMPLATES/reference_files" "$TARGET/reference_files"
+[ -e "$TARGET/README_hcocena.md" ] || cp "$TEMPLATES/README_hcocena.md" "$TARGET/README_hcocena.md"
+if [ ! -e "$TARGET/projects" ]; then
+  mkdir -p "$TARGET/projects"
+  cp -r "$TEMPLATES/project_template" "$TARGET/projects/example_project"
+fi
+date > "$MARKER"
+exit 0

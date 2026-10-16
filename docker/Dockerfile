@@ -54,17 +54,31 @@ RUN R -q -e "options(timeout = 1200); repos <- BiocManager::repositories(); repo
     R -q -e "packageVersion('hcocena')" && \
     R -q -e "v <- vignette(package = 'hcocena')\$results; print(v[, 'Item', drop = FALSE]); if (nrow(v) == 0) stop('The vignette was not installed.')"
 
-RUN mkdir -p /home/rstudio/count_data && \
-    mkdir -p /home/rstudio/annotation_data && \
-    mkdir -p /home/rstudio/project_data && \
-    mkdir -p /home/rstudio/output && \
-    mkdir -p /home/rstudio/reference_files && \
-    cp /opt/hcocena/docker/README.md /home/rstudio/README_docker.md && \
-    cp /opt/hcocena/docker/project_workflows/hcocena_main.Rmd /home/rstudio/01_hcocena_main.Rmd && \
-    cp /opt/hcocena/docker/project_workflows/hcocena_satellite.Rmd /home/rstudio/02_hcocena_satellite.Rmd && \
-    cp -r /opt/hcocena/docker/reference_files/. /home/rstudio/reference_files/ && \
-    cp /opt/hcocena/docker/project_data/README.md /home/rstudio/project_data/README.md && \
-    chown -R rstudio:rstudio /home/rstudio
+# Workspace. The templates live in /usr/local/share/hcocena and the source
+# tree is removed, so users only see their own home. The home is filled at
+# container start and at the first R session (hcocena-setup-workspace), which
+# also works when a platform mounts its own /home/rstudio:
+#   ~/README_hcocena.md, ~/reference_files/, ~/projects/example_project/
+# Further projects: copy example_project (paths are relative to the project).
+RUN T=/usr/local/share/hcocena && \
+    mkdir -p $T/project_template/count_data $T/project_template/annotation_data \
+             $T/project_template/project_data $T/project_template/output && \
+    cp -r /opt/hcocena/docker/reference_files $T/reference_files && \
+    cp /opt/hcocena/docker/workspace/README_hcocena.md $T/README_hcocena.md && \
+    cp /opt/hcocena/docker/project_workflows/hcocena_main.Rmd $T/project_template/01_hcocena_main.Rmd && \
+    cp /opt/hcocena/docker/project_workflows/hcocena_satellite.Rmd $T/project_template/02_hcocena_satellite.Rmd && \
+    cp /opt/hcocena/docker/project_data/README.md $T/project_template/project_data/README.md && \
+    install -m 0755 /opt/hcocena/docker/workspace/hcocena-setup-workspace /usr/local/bin/ && \
+    mkdir -p /etc/cont-init.d && \
+    install -m 0755 /opt/hcocena/docker/workspace/99_hcocena_workspace /etc/cont-init.d/ && \
+    sed -i 's/\r$//' /usr/local/bin/hcocena-setup-workspace \
+                     /etc/cont-init.d/99_hcocena_workspace && \
+    tr -d '\r' < /opt/hcocena/docker/workspace/Rprofile.site.append >> "$(R RHOME)/etc/Rprofile.site" && \
+    chmod -R a+rX $T && find $T -type f -exec chmod 0644 {} + && \
+    rm -rf /opt/hcocena && \
+    rm -rf /home/rstudio/* && \
+    su rstudio -s /bin/sh -c "/usr/local/bin/hcocena-setup-workspace /home/rstudio" && \
+    test -f /home/rstudio/projects/example_project/01_hcocena_main.Rmd
 
 WORKDIR /home/rstudio
 

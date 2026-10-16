@@ -1,0 +1,10 @@
+
+## hCoCena Docker image ------------------------------------------------------
+## Set up ~/projects, ~/reference_files and ~/README_hcocena.md on the first
+## interactive session (also when a platform mounts its own home directory).
+local({
+  if (interactive() || nzchar(Sys.getenv("RSTUDIO"))) {
+    try(system2("/usr/local/bin/hcocena-setup-workspace", shQuote(path.expand("~")),
+                stdout = FALSE, stderr = FALSE), silent = TRUE)
+  }
+})

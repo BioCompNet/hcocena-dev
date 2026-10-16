@@ -7,13 +7,17 @@ integration and downstream analysis of transcriptomics datasets.
 
 - the `hcocena` package preinstalled in the container, with its vignette:
   `vignette("hcocena-s4-workflow")` runs the whole analysis on bundled toy data
-- an RStudio workspace at `/home/rstudio`, with empty `count_data/`,
-  `annotation_data/`, `project_data/` and `output/` folders ready to use
-- bundled `reference_files/` with pathway, GO, hallmark, TF, and immune helper references
-- workflow notebooks in the workspace root, with the container paths already
-  filled in so they run without editing:
-  - `01_hcocena_main.Rmd`
-  - `02_hcocena_satellite.Rmd`
+- a project workspace in your RStudio home, set up at the first start (also
+  when a platform mounts its own home directory):
+  - `README_hcocena.md`
+  - `reference_files/` with pathway, GO, hallmark, TF, and immune helper
+    references, shared by all projects
+  - `projects/example_project/` with the workflow notebooks
+    `01_hcocena_main.Rmd` and `02_hcocena_satellite.Rmd` and empty
+    `count_data/`, `annotation_data/`, `project_data/` and `output/` folders;
+    the notebook paths are relative to the project folder
+- further projects: copy `example_project/` anywhere, e.g. into a mounted
+  folder; the reference files are found from any location
 - the unmodified templates for use outside the container, at
   `system.file("scripts", "workflows", package = "hcocena")`
 - RNA-seq and differential-expression packages including `DESeq2`, `limma`,

@@ -43,30 +43,36 @@ hc <- hc_init()
   + dir_reference_files: path of your reference files folder (the folder with corresponding files can be downloaded from the github repo https://github.com/MarieOestreich/hCoCena, they are contained in the folder 'reference_files')
   + dir_output: path to the location in which the save folder for this analyses should be created (e.g., "~/" for your home directory).
 
-  In the Docker image, project paths are preset to:
-  - count data: `/home/rstudio/count_data/`
-  - annotation: `/home/rstudio/annotation_data/`
-  - reference files: `/home/rstudio/reference_files/`
-  - output root: `/home/rstudio/output/`
-  - project data: `/home/rstudio/project_data/`
+  In the Docker image, every project is a folder under `~/projects/` that
+  holds this notebook. The paths below are relative to that folder, so a copied
+  or renamed project keeps working:
+  - count data: `count_data/`
+  - annotation: `annotation_data/`
+  - project data: `project_data/`
+  - output root: `output/`
+  - reference files: the shared `~/reference_files/`
+
+  New projects: copy the project folder (e.g. into a mounted folder) and rename it.
 
   The public Docker image does **not** bundle the project-specific `.rds`
-  inputs. Before running section 1.4, place these files into
-  `/home/rstudio/project_data/`:
+  inputs. Before running section 1.4, place these files into the
+  `project_data/` folder of this project:
   - `sample_table_230530.rds`
   - `vst_anno_log_230530.rds`
   - `exclusion_vector_lm_full_240625.rds`
 
-  Use `hc_auto_set_paths()` to keep this step short. It auto-detects Docker paths and local `reference_files`/`output` folders.
-
 ```{r}
-# Adapt these paths only if you are not running inside the Docker image:
-docker_workspace <- "/home/rstudio"
-project_data_dir <- paste0(docker_workspace, "/project_data")
+# The project folder is the folder of this notebook (RStudio and knitr run the
+# chunks there). Adapt the paths if your data lie elsewhere.
+project_dir <- normalizePath(".")
+project_data_dir <- file.path(project_dir, "project_data")
 dir_count_data <- FALSE
 dir_annotation <- FALSE
-dir_reference_files <- paste0(docker_workspace, "/reference_files/")
-dir_output <- paste0(docker_workspace, "/output/")
+dir_reference_files <- path.expand("~/reference_files/")
+if (!dir.exists(dir_reference_files)) {
+  dir_reference_files <- "/usr/local/share/hcocena/reference_files/"
+}
+dir_output <- paste0(file.path(project_dir, "output"), "/")
 
 hc <- hc_set_paths(
   hc,

@@ -1,0 +1,6 @@
+#!/usr/bin/with-contenv bash
+# Container start (rocker s6 init): set up the workspace of the RStudio user.
+USER=${USER:=rstudio}
+HOMEDIR=$(getent passwd "$USER" | cut -d: -f6)
+[ -n "$HOMEDIR" ] && [ -d "$HOMEDIR" ] || exit 0
+su "$USER" -s /bin/sh -c "/usr/local/bin/hcocena-setup-workspace '$HOMEDIR'" || true
