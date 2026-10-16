@@ -27,10 +27,11 @@ integration and downstream analysis of transcriptomics datasets.
 ## Recommended tags
 
 - `latest` for the current image and quick-start commands
-- `0.99.10` for a pinned, reproducible setup
+- `0.99.12` for a pinned, reproducible setup
 
 Older tags still kept for older reproducible runs:
 
+- `0.99.10`
 - `0.99.7`
 - `1.100`
 - `1.99`
@@ -57,7 +58,7 @@ Run RStudio Server:
 docker run --rm -p 8787:8787 -e PASSWORD=hcocena therealtomek/hcocena:latest
 ```
 
-For reproducible runs, replace `latest` with a pinned tag such as `0.99.10`.
+For reproducible runs, replace `latest` with a pinned tag such as `0.99.12`.
 
 Then open:
 
