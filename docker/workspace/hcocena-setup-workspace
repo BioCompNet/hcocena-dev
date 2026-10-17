@@ -1,20 +1,37 @@
 #!/bin/sh
-# Fill a home directory with the hCoCena workspace:
-#   ~/README_hcocena.md, ~/reference_files/, ~/projects/example_project/
+# Fill a home directory with the workspace of the image:
+#   ~/README_workspace.md, ~/reference_files/,
+#   ~/projects/hcocena_example/, ~/projects/deseq2_example/
 # Runs at container start and at every R session start, so the workspace also
-# appears when a platform mounts its own /home. It only acts once per home
-# (marker file) and never overwrites or recreates anything the user changed.
+# appears when a platform mounts its own /home. Each part is set up only once
+# per home (listed in the marker file) and nothing the user changed is
+# overwritten or recreated. A part added in a newer image is added once.
 TEMPLATES=/usr/local/share/hcocena
 TARGET="${1:-$HOME}"
 [ -d "$TARGET" ] && [ -w "$TARGET" ] || exit 0
 MARKER="$TARGET/.hcocena_workspace"
-[ -e "$MARKER" ] && exit 0
 
-[ -e "$TARGET/reference_files" ] || cp -r "$TEMPLATES/reference_files" "$TARGET/reference_files"
-[ -e "$TARGET/README_hcocena.md" ] || cp "$TEMPLATES/README_hcocena.md" "$TARGET/README_hcocena.md"
-if [ ! -e "$TARGET/projects" ]; then
-  mkdir -p "$TARGET/projects"
-  cp -r "$TEMPLATES/project_template" "$TARGET/projects/example_project"
+done_part() { [ -e "$MARKER" ] && grep -qx "$1" "$MARKER"; }
+
+# Homes from image 0.99.12 have a marker without part names (only a date);
+# their hCoCena part (projects/example_project) is already there.
+if [ -e "$MARKER" ] && ! done_part hcocena && ! done_part deseq2; then
+  echo hcocena >> "$MARKER"
 fi
-date > "$MARKER"
+
+if ! done_part hcocena; then
+  [ -e "$TARGET/reference_files" ] || cp -r "$TEMPLATES/reference_files" "$TARGET/reference_files"
+  mkdir -p "$TARGET/projects"
+  [ -e "$TARGET/projects/hcocena_example" ] ||
+    cp -r "$TEMPLATES/hcocena_template" "$TARGET/projects/hcocena_example"
+  echo hcocena >> "$MARKER"
+fi
+if ! done_part deseq2; then
+  mkdir -p "$TARGET/projects"
+  [ -e "$TARGET/projects/deseq2_example" ] ||
+    cp -r "$TEMPLATES/deseq2_template" "$TARGET/projects/deseq2_example"
+  echo deseq2 >> "$MARKER"
+fi
+# The README always describes the current image.
+cp "$TEMPLATES/README_workspace.md" "$TARGET/README_workspace.md" 2>/dev/null
 exit 0

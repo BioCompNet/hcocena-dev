@@ -16,3 +16,5 @@ Rplots.pdf
 *.html
 docker/project_data/*
 !docker/project_data/README.md
+docker/Dockerfile
+.dockerignore

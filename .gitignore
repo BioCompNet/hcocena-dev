@@ -27,3 +27,6 @@ test_llm_claude.R
 .codex/
 .Rhistory
 omnipathr-log/
+
+# DESeq2 workflow: only in the Docker image, not on GitHub
+docker/deseq2_workflow/

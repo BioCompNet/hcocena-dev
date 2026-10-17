@@ -44,6 +44,10 @@ RUN R -q -e "options(timeout = 1200); install.packages(c('remotes', 'BiocManager
 # expensive Bioconductor install above.
 RUN R -q -e "options(timeout = 1200); repos <- BiocManager::repositories(); repos['CRAN'] <- 'https://cloud.r-project.org'; options(repos = repos); pkgs <- c('BiocStyle', 'knitr', 'rmarkdown'); missing <- pkgs[!vapply(pkgs, requireNamespace, logical(1), quietly = TRUE)]; if (length(missing)) BiocManager::install(missing, ask = FALSE, update = FALSE); status <- vapply(pkgs, requireNamespace, logical(1), quietly = TRUE); print(status); if (!all(status)) stop('Missing vignette packages: ', paste(names(status)[!status], collapse = ', '))"
 
+# Optional packages of the DESeq2 workflow (docker/deseq2_workflow, see
+# check_requirements() there). msigdbr keeps the MSigDB data in msigdbrdata (r-universe).
+RUN R -q -e "options(timeout = 1200); repos <- BiocManager::repositories(); repos['CRAN'] <- 'https://cloud.r-project.org'; options(repos = repos); pkgs <- c('IHW', 'msigdbr', 'UpSetR', 'vsn', 'multcomp', 'lme4', 'fgsea', 'igraph', 'plotly', 'openxlsx'); missing <- pkgs[!vapply(pkgs, requireNamespace, logical(1), quietly = TRUE)]; if (length(missing)) BiocManager::install(missing, ask = FALSE, update = FALSE); install.packages('msigdbrdata', repos = c('https://igordot.r-universe.dev', repos)); pkgs <- c(pkgs, 'msigdbrdata'); status <- vapply(pkgs, requireNamespace, logical(1), quietly = TRUE); print(status); if (!all(status)) stop('Missing DESeq2 workflow packages: ', paste(names(status)[!status], collapse = ', '))"
+
 COPY . /opt/hcocena
 
 # build_vignettes = TRUE: the vignette is the package's worked example, so it
@@ -58,16 +62,21 @@ RUN R -q -e "options(timeout = 1200); repos <- BiocManager::repositories(); repo
 # tree is removed, so users only see their own home. The home is filled at
 # container start and at the first R session (hcocena-setup-workspace), which
 # also works when a platform mounts its own /home/rstudio:
-#   ~/README_hcocena.md, ~/reference_files/, ~/projects/example_project/
-# Further projects: copy example_project (paths are relative to the project).
+#   ~/README_workspace.md, ~/reference_files/,
+#   ~/projects/hcocena_example/, ~/projects/deseq2_example/
+# Further projects: copy an example project (paths are relative to it).
 RUN T=/usr/local/share/hcocena && \
-    mkdir -p $T/project_template/count_data $T/project_template/annotation_data \
-             $T/project_template/project_data $T/project_template/output && \
+    mkdir -p $T/hcocena_template/count_data $T/hcocena_template/annotation_data \
+             $T/hcocena_template/project_data $T/hcocena_template/output $T/deseq2_template && \
     cp -r /opt/hcocena/docker/reference_files $T/reference_files && \
-    cp /opt/hcocena/docker/workspace/README_hcocena.md $T/README_hcocena.md && \
-    cp /opt/hcocena/docker/project_workflows/hcocena_main.Rmd $T/project_template/01_hcocena_main.Rmd && \
-    cp /opt/hcocena/docker/project_workflows/hcocena_satellite.Rmd $T/project_template/02_hcocena_satellite.Rmd && \
-    cp /opt/hcocena/docker/project_data/README.md $T/project_template/project_data/README.md && \
+    cp /opt/hcocena/docker/workspace/README_workspace.md $T/README_workspace.md && \
+    cp /opt/hcocena/docker/project_workflows/hcocena_main.Rmd $T/hcocena_template/01_hcocena_main.Rmd && \
+    cp /opt/hcocena/docker/project_workflows/hcocena_satellite.Rmd $T/hcocena_template/02_hcocena_satellite.Rmd && \
+    cp /opt/hcocena/docker/project_data/README.md $T/hcocena_template/project_data/README.md && \
+    cp /opt/hcocena/docker/deseq2_workflow/* $T/deseq2_template/ && \
+    sed -i 's|^project_dir <- "path/to/project"|project_dir <- "."   # the folder of this notebook|' \
+        $T/deseq2_template/RNAseq_DESeq2_Workflow_V5_1.Rmd && \
+    grep -q '^project_dir <- "\."' $T/deseq2_template/RNAseq_DESeq2_Workflow_V5_1.Rmd && \
     install -m 0755 /opt/hcocena/docker/workspace/hcocena-setup-workspace /usr/local/bin/ && \
     mkdir -p /etc/cont-init.d && \
     install -m 0755 /opt/hcocena/docker/workspace/99_hcocena_workspace /etc/cont-init.d/ && \
@@ -78,7 +87,8 @@ RUN T=/usr/local/share/hcocena && \
     rm -rf /opt/hcocena && \
     rm -rf /home/rstudio/* && \
     su rstudio -s /bin/sh -c "/usr/local/bin/hcocena-setup-workspace /home/rstudio" && \
-    test -f /home/rstudio/projects/example_project/01_hcocena_main.Rmd
+    test -f /home/rstudio/projects/hcocena_example/01_hcocena_main.Rmd && \
+    test -f /home/rstudio/projects/deseq2_example/RNAseq_DESeq2_Functions_V5_1.R
 
 WORKDIR /home/rstudio
 

@@ -9,20 +9,23 @@ integration and downstream analysis of transcriptomics datasets.
   `vignette("hcocena-s4-workflow")` runs the whole analysis on bundled toy data
 - a project workspace in your RStudio home, set up at the first start (also
   when a platform mounts its own home directory):
-  - `README_hcocena.md`
+  - `README_workspace.md`
   - `reference_files/` with pathway, GO, hallmark, TF, and immune helper
-    references, shared by all projects
-  - `projects/example_project/` with the workflow notebooks
+    references, shared by all hCoCena projects
+  - `projects/hcocena_example/` with the hCoCena notebooks
     `01_hcocena_main.Rmd` and `02_hcocena_satellite.Rmd` and empty
-    `count_data/`, `annotation_data/`, `project_data/` and `output/` folders;
-    the notebook paths are relative to the project folder
-- further projects: copy `example_project/` anywhere, e.g. into a mounted
-  folder; the reference files are found from any location
+    `count_data/`, `annotation_data/`, `project_data/` and `output/` folders
+  - `projects/deseq2_example/` with an RNA-seq DESeq2 workflow
+    (`RNAseq_DESeq2_Workflow_V5_1.Rmd`, its functions file and a cheat sheet)
+  - the notebook paths are relative to the project folder
+- further projects: copy an example project anywhere, e.g. into a mounted
+  folder
 - the unmodified templates for use outside the container, at
   `system.file("scripts", "workflows", package = "hcocena")`
 - RNA-seq and differential-expression packages including `DESeq2`, `limma`,
   `sva`, `edgeR`, `tximport`, `apeglm`, `ashr`, `EnhancedVolcano`,
-  `pheatmap`, `org.Hs.eg.db`, and `org.Mm.eg.db`
+  `pheatmap`, `org.Hs.eg.db`, and `org.Mm.eg.db`, plus the optional packages
+  of the DESeq2 workflow (`IHW`, `msigdbr`, `fgsea`, `UpSetR`, `vsn`, ...)
 
 ## Recommended tags
 
